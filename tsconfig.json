@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "module": "none",
+    "outDir": "src/js",
+  },
+  "include": ["src/app"]
+}
