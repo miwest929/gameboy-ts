@@ -91,9 +91,18 @@ class CPU {
 
 	// Reference to RAM
     bus: MemoryBus;
+
+    // counter of cycles that has passed since CPU was powered on
+    cyclesCounter: number;
     
     constructor(bus: MemoryBus) {
         this.bus = bus;
+    }
+
+    public initAfterRomLoaded() {
+        this.PC = 0x100;  // starting address in the rom. The instruction at this address should be a JMP that jumps to the first
+                          // actual instruction to be executed.
+        this.cyclesCounter = 0;
     }
 
     public getRegisterVal(regId: number): number {
@@ -158,6 +167,18 @@ class Gameboy {
   }
 
   public powerOn() {
+      if (!this.cartridge.isLoaded) {
+          console.error("Error powering on the GameBoy due to the cartridge not being loaded yet.")
+          return;
+      }
+
+      if (this.cartridge.getRomHeaderInfo().cartridgeType !== 0x00) {
+          console.log(`Error: MBC banking is not yet supported and the rom does require MBC banking`);
+          return;
+      }
+
+      // initialize the CPU
+      this.cpu.initAfterRomLoaded();
   }
 
   // when cart is loaded its code is memory mapped to
@@ -201,14 +222,16 @@ const HEADER_TITLE_END_ADDR = 0x0143;
 class Cartridge {
     public romBytes: Uint8Array;
     public romName: string;
+    public isLoaded: boolean;
 
     constructor(name: string) {
         this.romName = name;
+        this.isLoaded = true;
     }
 
-    public async load(): Promise<Uint8Array> {
+    public async load() {
         this.romBytes = await loadRom('tetris');
-        return this.romBytes;
+        this.isLoaded = true;
     }
 
     public getRomHeaderInfo(): IRomHeader {
