@@ -14,3 +14,8 @@ function multiDimRepeat<T>(value: T, rowCount: number, colCount: number): T[][] 
     }
     return arr;
 }
+
+function uInt8ArrayToUtf8(bytes: Uint8Array): string {
+    let utf8decoder = new TextDecoder();
+    return utf8decoder.decode(bytes);
+}

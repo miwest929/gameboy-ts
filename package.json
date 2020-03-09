@@ -1,0 +1,12 @@
+{
+  "name": "gameboy emulator",
+  "version": "0.1.0",
+  "description": "Play around with the MessagePack library for Typescript",
+  "author": "Michael West",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^13.7.1",
+    "typescript": "^3.3.3333"
+  }
+}

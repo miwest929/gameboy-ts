@@ -30,4 +30,14 @@ function gameLoop() {
     window.requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+const gameboy = new Gameboy();
+const cart = new Cartridge('tetris');
+
+const main = async () => {
+    await gameboy.loadCartridge(cart);
+    console.log(cart.getRomHeaderInfo());
+    gameboy.powerOn();
+
+    gameLoop();
+}
+main();

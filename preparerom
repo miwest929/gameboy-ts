@@ -1,0 +1,6 @@
+preparerom() {
+    romName=$1
+    cat "roms/$1.gb" | openssl base64 > "roms/base64/$1.gb.base64"
+}
+
+preparerom $1
