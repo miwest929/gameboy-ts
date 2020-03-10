@@ -1,11 +1,5 @@
-//import { getPixelBufferForCanvasElement, ICanvasElementBuffer } from './screen_renderer';
-//import { PPU, IScreenBuffer } from './ppu';
-
 let canvas:HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
 let ctx:CanvasRenderingContext2D = canvas.getContext('2d');
-
-
-const ppu = new PPU();
 
 function renderGameboyScreenBuffer(buffer: IScreenBuffer, startX: number, startY: number) {
     const canvasBuffer: ICanvasElementBuffer = getPixelBufferForCanvasElement(buffer);
@@ -17,17 +11,11 @@ function renderGameboyScreenBuffer(buffer: IScreenBuffer, startX: number, startY
     }
 }
 
-function render(ctx: CanvasRenderingContext2D) {
+function render(ctx: CanvasRenderingContext2D, screenBuffer: IScreenBuffer) {
     ctx.fillStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const screenBuffer: IScreenBuffer = ppu.getScreenBufferData();
     renderGameboyScreenBuffer(screenBuffer, 180, 62);
-}
-
-function gameLoop() {
-    render(ctx);
-    window.requestAnimationFrame(gameLoop);
 }
 
 const gameboy = new Gameboy();
@@ -36,8 +24,14 @@ const cart = new Cartridge('tetris');
 const main = async () => {
     await gameboy.loadCartridge(cart);
     console.log(cart.getRomHeaderInfo());
-    gameboy.powerOn();
 
-    gameLoop();
+    const worker = new Worker(emulatorWorkerCode); //'emulator_worker.js');
+    worker.onmessage = (e) => {
+      const buffer = e.data.buffer;
+      render(ctx, buffer);
+    };
+    gameboy.powerOn();
+    worker.postMessage({gameboy: gameboy});
 }
+
 main();

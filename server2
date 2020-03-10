@@ -1,0 +1,1 @@
+http-server src/js --cors -p 8082
