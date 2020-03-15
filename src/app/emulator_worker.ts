@@ -14,22 +14,38 @@ onmessage = (e) => {
     gameboy.cpu.__proto__ = CPU.prototype;
     gameboy.bus.__proto__ = MemoryBus.prototype;
     gameboy.memory.__proto__ = Memory.prototype;
+    gameboy.ppu.__proto__ = PPU.prototype;
 
+    console.log('Powered on. Executing rom program');
+
+    const turboMode = false;
+    if (turboMode) {
+      let keepExecuting = true;
+      while (keepExecuting) {
+        const cycles = gameboy.executeNextStep();
+        if (cycles === 0) {
+          console.log("CPU failed. Shutting down.");
+          keepExecuting = false;
+        }
+      }
+    } else {
+      const cpuLoopId = setInterval(() => {
+        const cycles = gameboy.executeNextStep();
+        if (cycles === 0) {
+          console.log("CPU failed. Shutting down.");
+          clearInterval(cpuLoopId);
+        }
+      }, 1000.0 / ${INSTRUCTIONS_PER_SECOND});
+    }
+}`;
     //gameboy.powerOn();
 
     //setInterval(() => {
     //  postMessage({buffer: gameboy.getScreenBuffer()}, "*"); // last arg is for targetOrigin. A value of "*" indicates 'no preference'
     //}, 1000.0 / ${REFRESH_HERTZ_PER_SECOND});
 
-    console.log('Powered on. Executing rom program');
-
-    const cpuLoopId = setInterval(() => {
-      const cycles = gameboy.executeNextStep();
-      if (cycles === 0) {
-        console.log("CPU failed. Shutting down.");
-        clearInterval(cpuLoopId);
-      }
-    }, 1000.0 / ${INSTRUCTIONS_PER_SECOND});
-}`;
+//const cpuLoopId = setInterval(() => {
+  //   clearInterval(cpuLoopId);
+//}, 1000.0 / ${INSTRUCTIONS_PER_SECOND});
 
 const emulatorWorkerCode = URL.createObjectURL(new Blob([workerCode]));

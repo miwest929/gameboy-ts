@@ -29,7 +29,7 @@ $4000-$7FFF - ROM Bank n
 $8000-$97FF - Character RAM
 */
 const RAM_SIZE_IN_BYTES = 65536;
-
+const ROM_BANK_END_ADDR = 32767;
 // The boot rom is readable while booting but afterwards the address space of the ROM is remapped for interrupt vectors and other uses.
 
 class Memory {
@@ -58,16 +58,29 @@ class MemoryBus {
     }
 
     public writeByte(addr: number, value: number) {
-        this.memory.write(addr, value);
-
         // if writing to memory mapped vram
         if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
-            this.ppu.write(addr - VRAM_ADDR_BEGIN, value);
+            this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
+        } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
+            this.ppu.writeToOAM(addr - OAM_ADDR_BEGIN, value);
+        } else if (addr === LY_ADDR) {
+            // ignore
+        } else {
+            this.memory.write(addr, value);
         }
     }
 
     public readByte(addr: number): number {
-        return this.memory.read(addr);
+        if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
+            return this.ppu.readFromVRAM(addr - VRAM_ADDR_BEGIN);
+        } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
+            return this.ppu.readFromOAM(addr - OAM_ADDR_BEGIN);
+        } else if (addr === LY_ADDR) {
+            console.log("READ the LY special register");
+            return this.ppu.LY;
+        } else {
+            return this.memory.read(addr);
+        }
     }
 }
 
@@ -151,6 +164,12 @@ class CPU {
     
     constructor(bus: MemoryBus) {
         this.bus = bus;
+        this.A = 0;
+        this.B = 0;
+        this.C = 0;
+        this.D = 0;
+        this.E = 0;
+        this.F = 0;
     }
 
     public initAfterRomLoaded() {
@@ -411,7 +430,6 @@ class CPU {
             this.updateHalfCarryFlag(this.D, 1);
             this.D = result[0]; 
             
-
             this.updateZeroFlag(this.D);
             this.clearFlag(SUBTRACTION_FLAG);
 
@@ -574,10 +592,42 @@ class CPU {
             this.IME = 0x00;
             this.PC++;
             return 4;
+        } else if (currByte === 0xE0) {
+            // LDH (a8),A
+            let value = this.bus.readByte(this.PC + 1);
+            this.bus.writeByte(0xFF00 + value, this.A);
+            console.log(`[${this.PC}] LDH (${0xFF00 + value}), A`);
+            this.PC += 2;
+            return 12;
+        } else if (currByte === 0xF0) {
+            /// LDH A, (a8)
+            let value = this.bus.readByte(this.PC + 1);
+            this.A = this.bus.readByte(0xFF00 + value);
+            console.log(`[${this.PC}] LDH A, (${0xFF00 + value})`);
+            this.PC += 2;
+            return 12;
+        } else if (currByte === 0xFE) {
+            // Compare A with n. This is basically an A - n subtraction instruction but the results are thrown away.
+            // CP d8
+            let value = this.bus.readByte(this.PC + 1);
+            console.log(`CP ${value}`);
+            let result = wrappingByteSub(this.A, value);
+            this.updateZeroFlag(result[0]);
+            this.setFlag(SUBTRACTION_FLAG);
+            this.updateHalfCarryFlag(this.A, value);
+            result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
+
+            this.PC += 2;
+            return 8;
         }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
         return 0;
+    }
+
+      // @return number-of-cycles the last instruction took
+    public executeNextStep() {
+      return this.executeInstruction();
     }
 
     private stackPush(value: number) {
@@ -642,16 +692,16 @@ class Gameboy {
     return this.ppu.getScreenBufferData();
   }
 
-  // @return number-of-cycles the last instruction took
   public executeNextStep() {
-    return this.cpu.executeInstruction();
+      const cycles = this.cpu.executeNextStep();
+      this.ppu.step(cycles);
   }
 
   public executeRom() {
     this.cyclesCounter = 0;
     while (true) {
       // ExecuteNextInstruction will modify the PC register appropriately
-      this.cyclesCounter += this.cpu.executeInstruction();
+      this.cyclesCounter += this.cpu.executeNextStep();
     }
   }
 
@@ -664,7 +714,7 @@ class Gameboy {
       await this.cartridge.load();
 
       // load bank 0 into Gameboy's ram (0x0000 - 0x3FFF)(16K bytes)
-      this.loadRomDataIntoMemory(0x0000, 0x0000, 16384);
+      this.loadRomDataIntoMemory(0x0000, 0x0000, ROM_BANK_END_ADDR);
   }
 
   private loadRomDataIntoMemory(startRamAddr: number, startRomAddr: number, bankSizeBytes: number) {

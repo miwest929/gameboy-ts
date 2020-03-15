@@ -21,6 +21,25 @@ function render(ctx: CanvasRenderingContext2D, screenBuffer: IScreenBuffer) {
 const gameboy = new Gameboy();
 const cart = new Cartridge('tetris');
 
+const renderCPUInfo = () => {
+    const cpuElement = $('#cpu');
+    cpuElement.empty();
+    cpuElement.html(`
+      <div>PC = ${gameboy.cpu.PC}</div>
+      <div>SP = ${gameboy.cpu.SP}</div>
+      <div>A = ${gameboy.cpu.A}</div>
+      <div>B = ${gameboy.cpu.B}</div>
+      <div>C = ${gameboy.cpu.C}</div>
+      <div>D = ${gameboy.cpu.D}</div>
+      <div>E = ${gameboy.cpu.E}</div>
+      <div>F = ${gameboy.cpu.F}</div>
+    `);
+}
+
+const renderEmulatorInfo = () => {
+    renderCPUInfo();
+}
+
 const main = async () => {
     await gameboy.loadCartridge(cart);
     console.log(cart.getRomHeaderInfo());
@@ -32,6 +51,8 @@ const main = async () => {
     };
     gameboy.powerOn();
     worker.postMessage({gameboy: gameboy});
+
+    setInterval(renderEmulatorInfo, 40);
 }
 
 main();
