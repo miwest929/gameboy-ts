@@ -84,13 +84,21 @@ class PPU {
     public LX: number;
     public mode: PPU_MODES;
 
+    public SCROLL_Y: number;
+    public SCROLL_X: number;
+    public LCDC: number;
+    //public isDisplayOn: boolean; // derived from value of LCDC special register
+
     private clock: number;
 
     constructor() {
         this.buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
         this.vram = new Uint8Array(VRAM_SIZE_BYTES);
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
-        this.clock = 0;
+        this.clock = 0x00;
+        this.LY = 0x00;
+        this.LX = 0x00;
+        this.LCDC = 0x00;
     }
 
     public getScreenBufferData(): IScreenBuffer {
@@ -101,15 +109,57 @@ class PPU {
         };
     }
 
+    public writeSpecialRegister(addr: number, value: number) {
+        if (addr === LCDC_ADDR) {
+            console.log("WRITE TO the LCDC special register");
+            this.LCDC = value;
+        } else if (addr === LY_ADDR) {
+            // ignore. this is a read-only register
+        } else if (addr === SCROLLY_ADDR) {
+            this.SCROLL_Y = value
+        } else if (addr === SCROLLX_ADDR) {
+            this.SCROLL_X = value;
+        } else {
+            console.error(`Don't support writing to special reg at addr ${addr}`);
+        }
+    }
+
+    public readFromSpecialRegister(addr: number): number {
+        if (addr === LCDC_ADDR) {
+            return this.LCDC;
+        } else if (addr === LY_ADDR) {
+            console.log("READ the LY special register");
+            return this.LY;
+        } else if (addr === SCROLLY_ADDR) {
+            return this.SCROLL_Y;
+        } else if (addr === SCROLLX_ADDR) {
+            return this.SCROLL_X;
+        } else {
+            console.error(`Don't support reading to special reg at addr ${addr}`);
+        }
+    }
+
+    public isDisplayOn(): boolean {
+      return (this.LCDC & 0x80) === 0x80;
+    }
+
     public step(cycles: number) {
-      if (this.LY >= 144) {
+      if (!this.isDisplayOn()) {
+		this.LY = 0;
+		this.clock = 456;
+		this.mode = PPU_MODES.HBlankPeriod;
+      } else if (this.LY >= 144) {
         this.mode = PPU_MODES.VBlankPeriod;
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES) {
-         this.mode = PPU_MODES.SearchingOAMPeriod; 
+        this.mode = PPU_MODES.SearchingOAMPeriod; 
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
-          this.mode = PPU_MODES.SearchingVRAMPeriod;
+        this.mode = PPU_MODES.SearchingVRAMPeriod;
       } else {
-          this.mode = PPU_MODES.HBlankPeriod;
+        this.mode = PPU_MODES.HBlankPeriod;
+      }
+
+      if (!this.isDisplayOn()) {
+          return;
       }
 
       this.clock -= cycles;

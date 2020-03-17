@@ -21,8 +21,18 @@ function render(ctx: CanvasRenderingContext2D, screenBuffer: IScreenBuffer) {
 const gameboy = new Gameboy();
 const cart = new Cartridge('tetris');
 
+const renderPPUInfo = () => {
+    const ppuInfo = $('#ppuInfo');
+    ppuInfo.empty();
+    ppuInfo.html(`
+      <div>LY = ${gameboy.ppu.LY}</div>
+      <div>LX = ${gameboy.ppu.LX}</div>
+      <div>LCDC = ${gameboy.ppu.LCDC}</div>
+    `);
+}
+
 const renderCPUInfo = () => {
-    const cpuElement = $('#cpu');
+    const cpuElement = $('#cpuInfo');
     cpuElement.empty();
     cpuElement.html(`
       <div>PC = ${gameboy.cpu.PC}</div>
@@ -38,21 +48,23 @@ const renderCPUInfo = () => {
 
 const renderEmulatorInfo = () => {
     renderCPUInfo();
+    renderPPUInfo();
+}
+
+const emulatorNextStep = () => {
+    gameboy.executeNextStep();
 }
 
 const main = async () => {
     await gameboy.loadCartridge(cart);
     console.log(cart.getRomHeaderInfo());
-
-    const worker = new Worker(emulatorWorkerCode); //'emulator_worker.js');
-    worker.onmessage = (e) => {
-      const buffer = e.data.buffer;
-      render(ctx, buffer);
-    };
+    console.log('Powered on. Executing rom program');
     gameboy.powerOn();
-    worker.postMessage({gameboy: gameboy});
 
     setInterval(renderEmulatorInfo, 40);
+
+    const INSTRUCTIONS_PER_SECOND = 160;
+    setInterval(emulatorNextStep, 3); //1000 / INSTRUCTIONS_PER_SECOND);
 }
 
 main();

@@ -1,8 +1,8 @@
-declare const jQuery : any;
+//declare const jQuery : any;
 
 function loadRom(romName: string): Promise<Uint8Array> {
     return new Promise(function(resolve, reject) {
-        jQuery.ajax({
+        $.ajax({
             url: `http://localhost:8081/${romName}.gb.base64`,
             method: 'GET',
             success: (data) => {

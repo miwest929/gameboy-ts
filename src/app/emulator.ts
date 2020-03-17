@@ -60,11 +60,12 @@ class MemoryBus {
     public writeByte(addr: number, value: number) {
         // if writing to memory mapped vram
         if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
+            console.log("WRITING TO VRAM!!");
             this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
         } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - OAM_ADDR_BEGIN, value);
-        } else if (addr === LY_ADDR) {
-            // ignore
+        } else if (addr >= 0xff40 && addr <= 0xff4a) {
+            this.ppu.writeSpecialRegister(addr, value);
         } else {
             this.memory.write(addr, value);
         }
@@ -75,9 +76,8 @@ class MemoryBus {
             return this.ppu.readFromVRAM(addr - VRAM_ADDR_BEGIN);
         } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
             return this.ppu.readFromOAM(addr - OAM_ADDR_BEGIN);
-        } else if (addr === LY_ADDR) {
-            console.log("READ the LY special register");
-            return this.ppu.LY;
+        } else if (addr >= 0xff40 && addr <= 0xff4a) {
+            return this.ppu.readFromSpecialRegister(addr);
         } else {
             return this.memory.read(addr);
         }
@@ -575,6 +575,7 @@ class CPU {
             // Push present address onto stack. Jump to address $0000 + 56 (0x38).
             // RST 38H
             console.log("RST 38H");
+            this.PC++; // push the next address onto the stack
             this.stackPush(this.PC & 0x00FF);
             this.stackPush((this.PC & 0xFF00) >> 8);
             this.PC = 0x38;
@@ -619,6 +620,20 @@ class CPU {
 
             this.PC += 2;
             return 8;
+        } else if (currByte === 0x36) {
+            // LD (HL), d8
+            const value = this.bus.readByte(this.PC + 1);
+            console.log(`LD (HL), ${value}`);
+            this.bus.writeByte(this.HL, value);
+            this.PC += 2;
+            return 12;
+        } else if (currByte === 0xEA) {
+            // LDH (a8), A
+            const addr = this.bus.readByte(this.PC + 1);
+            console.log(`LDH (${addr}), A`);
+            this.bus.writeByte(addr, this.A);
+            this.PC += 2;
+            return 12;
         }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
@@ -627,12 +642,13 @@ class CPU {
 
       // @return number-of-cycles the last instruction took
     public executeNextStep() {
-      return this.executeInstruction();
+      const cycles = this.executeInstruction();
+      return cycles;
     }
 
     private stackPush(value: number) {
         this.bus.writeByte(this.SP, value);
-        this.SP++;
+        this.SP--;
     }
 
     private updateZeroFlag(value: number) {
