@@ -218,29 +218,6 @@ class CPU {
         this.F = this.F | ~flag;
     }
 
-    public getRegisterVal(regId: number): number {
-        if (regId == 0x00) {
-            return this.B;
-        } else if (regId == 0x01) {
-            return this.C;
-        } else if (regId == 0x02) {
-            return this.D;
-        } else if (regId == 0x03) {
-            return this.E;
-        } else if (regId == 0x04) {
-            return this.H();
-        } else if (regId == 0x05) {
-            return this.L();
-        } else if (regId == 0x06) {
-            return 0; // TODO: return value at address pointed to HL
-        } else if (regId == 0x07) {
-            return this.A;
-        }
-    
-        // should never get here
-        return 0
-    }
-
     // Due to JMP, RET instructions this fn must modify the PC register itself.
     // The return value is the number of cycles the instruction took
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
