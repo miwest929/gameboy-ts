@@ -1,21 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <style>
-      canvas {
-        padding-left: 0;
-        padding-right: 0;
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
-      }
-    </style>
+    <link rel="stylesheet" type="text/css" href="main.css">
   </head>
   <body>
     <div id="fps"></div>
-    <div id="debugInfo">
-       <div id="cpuInfo" style='border: 1px black; padding-bottom: 20px;'></div>
-       <div id="ppuInfo" style='border: 1px black'></div>
+    <div class='debug-container'>
+      <!-- <div class='row1'> -->
+       <label>CPU</label>
+       <div id="cpuInfo"></div>
+       <!-- <div class="memory-debug"></div> -->
+      <!-- </div> -->
+      <!-- <div class='row2'> -->
+       <label>PPU</label>
+       <div id="ppuInfo"></div>
+      <!-- </div>  -->
     </div>
 
     <canvas id='canvas' width='1000' height='700' border='1px' class='nocursor'></canvas>

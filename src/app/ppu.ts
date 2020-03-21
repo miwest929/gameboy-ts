@@ -25,6 +25,16 @@ const LCDC_OBJ_SPRITE_SIZE_FLAG = 0x04;
 const LCDC_OBJ_SPRITE_DISPLAY_FLAG = 0x02;
 const LCDC_BG_WINDOW_DISPLAY_FLAG = 0x01;
 
+// Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
+//  Bit 5 - Mode 2 OAM Interrupt         (1=Enable) (Read/Write)
+//  Bit 4 - Mode 1 V-Blank Interrupt     (1=Enable) (Read/Write)
+//  Bit 3 - Mode 0 H-Blank Interrupt     (1=Enable) (Read/Write)
+//  Bit 2 - Coincidence Flag  (0:LYC<>LY, 1:LYC=LY) (Read Only)
+//  Bit 1-0 - Mode Flag       (Mode 0-3, see below) (Read Only)
+//            0: During H-Blank
+//            1: During V-Blank
+//            2: During Searching OAM
+//            3: During Transferring Data to LCD Driver
 const STAT_ADDR = 0xff41; // LCDC Status (R/W)
 const PPU_MODES = {
     HBlankPeriod: "HBlankPeriod",               // 0
@@ -39,9 +49,53 @@ const SCROLLX_ADDR = 0xff43;
 const LY_ADDR = 0xff44;
 const LYC_ADDR = 0xff45;
 const DMA_ADDR = 0xff46;
+
+// FF47 - BGP - BG Palette Data (R/W) - Non CGB Mode Only
+// Bit 7-6 - Shade for Color Number 3
+// Bit 5-4 - Shade for Color Number 2
+// Bit 3-2 - Shade for Color Number 1
+// Bit 1-0 - Shade for Color Number 0
+// The four possible gray shades are:
+//  0  White
+//  1  Light gray
+//  2  Dark gray
+//  3  Black
 const BGP_ADDR = 0xff47;
+const BGP_COLORS = {
+    White: 0,
+    LightGray: 1,
+    DarkGray: 2,
+    Black: 3
+} as const;
+type BGP_COLORS = typeof BGP_COLORS[keyof typeof BGP_COLORS];
+interface IBGP {
+    ColorThreeShade: number,
+    ColorTwoShade: number,
+    ColorOneShade: number,
+    ColorZeroShade: number
+}
+const parseBGPRegister(value: number): IBGP => {
+    const colorThree = (value & 0xC0) >> 6;
+    const colorTwo = (value & 0x30) >> 4;
+    const colorOne = (value & 0x0C) >> 2;
+    const colorZero = (value & 0x03);
+
+    return {
+        ColorThreeShade: colorThree,
+        ColorTwoShade: colorTwo,
+        ColorOneShade: colorOne,
+        ColorZeroShade: colorZero,
+    };
+}
+
+// FF48 - OBP0 - Object Palette 0 Data (R/W) - Non CGB Mode Only
+// This register assigns gray shades for sprite palette 0. It works exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
 const OBP0_ADDR = 0xff48;
+
+// FF49 - OBP1 - Object Palette 1 Data (R/W) - Non CGB Mode Only
+// This register assigns gray shades for sprite palette 1. It works exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
 const OBP1_ADDR = 0xff49;
+
 const WINDOWY_ADDR = 0xff4a;
 const WINDOWX_ADDR = 0xff4b;
 
@@ -61,7 +115,6 @@ const BLACK_PIXEL = 0x0;
 // Every byte is 4 pixels. 2 bytes per row
 // Each tile are 8x8 pixels. Each pixel occupies 2 bits. 128 bits / 8 = 16 bytes
 // tiles are 16 bytes long
-
 
 interface IScreenBuffer {
     widthInPx: number;
@@ -87,6 +140,7 @@ class PPU {
     public SCROLL_Y: number;
     public SCROLL_X: number;
     public LCDC: number;
+    public BGP_PALETTE_DATA: number; // TODO: initialize to the correct initial value
     //public isDisplayOn: boolean; // derived from value of LCDC special register
 
     private clock: number;
@@ -119,6 +173,11 @@ class PPU {
             this.SCROLL_Y = value
         } else if (addr === SCROLLX_ADDR) {
             this.SCROLL_X = value;
+        } else if (addr === STAT_ADDR) {
+        } else if (addr === BGP_ADDR) {
+            this.BGP_PALETTE_DATA = value;
+        } else if (addr === OBP0_ADDR) {
+        } else if (addr === OBP1_ADDR) {
         } else {
             console.error(`Don't support writing to special reg at addr ${addr}`);
         }
@@ -134,6 +193,10 @@ class PPU {
             return this.SCROLL_Y;
         } else if (addr === SCROLLX_ADDR) {
             return this.SCROLL_X;
+        } else if (addr === STAT_ADDR) {
+        } else if (addr === BGP_ADDR) {
+        } else if (addr === OBP0_ADDR) {
+        } else if (addr === OBP1_ADDR) {
         } else {
             console.error(`Don't support reading to special reg at addr ${addr}`);
         }

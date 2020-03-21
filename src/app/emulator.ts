@@ -605,12 +605,15 @@ class CPU {
             this.PC += 2;
             return 12;
         } else if (currByte === 0xEA) {
-            // LDH (a8), A
-            const addr = this.bus.readByte(this.PC + 1);
+            // LDH (a16), A
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb >> 8) & lsb;
             console.log(`LDH (${addr}), A`);
             this.bus.writeByte(addr, this.A);
-            this.PC += 2;
-            return 12;
+
+            this.PC += 3;
+            return 16;
         }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
