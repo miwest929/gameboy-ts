@@ -36,13 +36,74 @@ const LCDC_BG_WINDOW_DISPLAY_FLAG = 0x01;
 //            2: During Searching OAM
 //            3: During Transferring Data to LCD Driver
 const STAT_ADDR = 0xff41; // LCDC Status (R/W)
-const PPU_MODES = {
+const LCDC_MODES = {
+    NotInitialized: "NotInitialized",
     HBlankPeriod: "HBlankPeriod",               // 0
     VBlankPeriod: "VBlankPeriod",               // 1
     SearchingOAMPeriod: "SearchingOAMPeriod",   // 2
     SearchingVRAMPeriod: "SearchingVRAMPeriod"  // 3
 } as const;
-type PPU_MODES = typeof PPU_MODES[keyof typeof PPU_MODES];
+type LCDC_MODES = typeof LCDC_MODES[keyof typeof LCDC_MODES];
+class LCDCStatus {
+    RawValue: number;
+    CoincidenceInterruptStatus: boolean; // enabled = true
+    OAMInterruptStatus: boolean; // enabled = true
+    VBlankInterruptStatus: boolean; // enabled = true
+    HBlankInterruptStatus: boolean; // enabled = true
+    CoincidenceFlag: string; // 0:LYC<>LY (LYC_NEQ_LY), 1:LYC=LY ()   [READ_ONLY]
+    ModeFlag: LCDC_MODES; // [READ_ONLY]
+     
+    constructor() {
+        this.ModeFlag = "NotInitialized"; // the mode flag is not set initially. It needs to be set during PPU.step function
+    }
+
+    static parseLCDCStatusRegister(value: number): LCDCStatus {
+        /*const modeFlagValue = (0x03 & value);
+        let modeFlag;
+        if (modeFlagValue === 0)
+          modeFlag = "HBlankPeriod";
+        else if (modeFlagValue === 1)
+          modeFlag = "VBlankPeriod";
+        else if (modeFlagValue === 2)
+          modeFlag = "SearchingOAMPeriod";
+        else if (modeFlagValue === 3)
+          modeFlag = "SearchingVRAMPeriod"; */
+      
+        let status = new LCDCStatus();
+        status.RawValue = value;
+        status.CoincidenceInterruptStatus = (value & 0x40) === 0x40;
+        status.OAMInterruptStatus = (value & 0x20) === 0x20;
+        status.VBlankInterruptStatus = (value & 0x10) === 0x10;
+        status.HBlankInterruptStatus = (value & 0x08) === 0x08;
+        status.CoincidenceFlag = (value & 0x04) === 0x04 ? 'LYC_EQ_LY' : 'LYC_NEQ_LY';
+        status.ModeFlag = "NotInitialized";
+        return status;
+    }
+
+    update(value: number) {
+        // don't touch the ModeFlag and the CoincidenceFlag
+        // so last 3 bits will remain untouched
+        this.RawValue = (value & 0xF8) | (this.RawValue & 0x07);
+        this.CoincidenceInterruptStatus = (value & 0x40) === 0x40;
+        this.OAMInterruptStatus = (value & 0x20) === 0x20;
+        this.VBlankInterruptStatus = (value & 0x10) === 0x10;
+        this.HBlankInterruptStatus = (value & 0x08) === 0x08;
+        this.CoincidenceFlag = (value & 0x04) === 0x04 ? 'LYC_EQ_LY' : 'LYC_NEQ_LY';
+    }
+
+    updateModeFlag(newModeFlag: LCDC_MODES) {
+      this.ModeFlag = newModeFlag;
+      let modeMask = 0;
+      if (this.ModeFlag === 'VBlankPeriod')
+        modeMask = 1;
+      else if (this.ModeFlag === 'SearchingOAMPeriod')
+          modeMask = 2;
+      else if (this.ModeFlag === 'SearchingVRAMPeriod')
+          modeMask = 3;    
+
+      this.RawValue = (this.RawValue & 0xFC) | modeMask;
+    }
+}
 
 const SCROLLY_ADDR = 0xff42;
 const SCROLLX_ADDR = 0xff43;
@@ -69,18 +130,20 @@ const BGP_COLORS = {
 } as const;
 type BGP_COLORS = typeof BGP_COLORS[keyof typeof BGP_COLORS];
 interface IBGP {
+    RawValue: number;
     ColorThreeShade: number,
     ColorTwoShade: number,
     ColorOneShade: number,
     ColorZeroShade: number
 }
-const parseBGPRegister(value: number): IBGP => {
+const parseBGPRegister = (value: number): IBGP => {
     const colorThree = (value & 0xC0) >> 6;
     const colorTwo = (value & 0x30) >> 4;
     const colorOne = (value & 0x0C) >> 2;
     const colorZero = (value & 0x03);
 
     return {
+        RawValue: value,
         ColorThreeShade: colorThree,
         ColorTwoShade: colorTwo,
         ColorOneShade: colorOne,
@@ -135,12 +198,14 @@ class PPU {
     // ppu special registers
     public LY: number;
     public LX: number;
-    public mode: PPU_MODES;
+    //public mode: LCDC_MODES;
 
     public SCROLL_Y: number;
     public SCROLL_X: number;
     public LCDC: number;
-    public BGP_PALETTE_DATA: number; // TODO: initialize to the correct initial value
+    public BGP_PALETTE_DATA: IBGP; // TODO: initialize to the correct initial value
+    public LCDC_STATUS: LCDCStatus; // TODO: initialize to the correct initial value
+
     //public isDisplayOn: boolean; // derived from value of LCDC special register
 
     private clock: number;
@@ -153,6 +218,7 @@ class PPU {
         this.LY = 0x00;
         this.LX = 0x00;
         this.LCDC = 0x00;
+        this.LCDC_STATUS = null;
     }
 
     public getScreenBufferData(): IScreenBuffer {
@@ -174,8 +240,13 @@ class PPU {
         } else if (addr === SCROLLX_ADDR) {
             this.SCROLL_X = value;
         } else if (addr === STAT_ADDR) {
+            if (this.LCDC_STATUS) {
+              this.LCDC_STATUS.update(value);
+            } else {
+              this.LCDC_STATUS = LCDCStatus.parseLCDCStatusRegister(value);
+            }
         } else if (addr === BGP_ADDR) {
-            this.BGP_PALETTE_DATA = value;
+            this.BGP_PALETTE_DATA = parseBGPRegister(value);
         } else if (addr === OBP0_ADDR) {
         } else if (addr === OBP1_ADDR) {
         } else {
@@ -194,7 +265,9 @@ class PPU {
         } else if (addr === SCROLLX_ADDR) {
             return this.SCROLL_X;
         } else if (addr === STAT_ADDR) {
+            return this.LCDC_STATUS.RawValue;
         } else if (addr === BGP_ADDR) {
+            return this.BGP_PALETTE_DATA.RawValue;
         } else if (addr === OBP0_ADDR) {
         } else if (addr === OBP1_ADDR) {
         } else {
@@ -209,16 +282,17 @@ class PPU {
     public step(cycles: number) {
       if (!this.isDisplayOn()) {
 		this.LY = 0;
-		this.clock = 456;
-		this.mode = PPU_MODES.HBlankPeriod;
+        this.clock = 456;
+        
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.HBlankPeriod);
       } else if (this.LY >= 144) {
-        this.mode = PPU_MODES.VBlankPeriod;
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.VBlankPeriod);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES) {
-        this.mode = PPU_MODES.SearchingOAMPeriod; 
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod); 
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
-        this.mode = PPU_MODES.SearchingVRAMPeriod;
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
       } else {
-        this.mode = PPU_MODES.HBlankPeriod;
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.HBlankPeriod);
       }
 
       if (!this.isDisplayOn()) {
