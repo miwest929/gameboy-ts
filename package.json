@@ -1,11 +1,17 @@
 {
-  "name": "gameboy emulator",
+  "name": "gameboy_emulator",
   "version": "0.1.0",
   "description": "Play around with the MessagePack library for Typescript",
   "author": "Michael West",
   "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
   "dependencies": {
-    "@types/jquery": "^3.3.33"
+    "@types/jest": "^25.1.4",
+    "@types/jquery": "^3.3.33",
+    "jest": "^25.1.0",
+    "ts-jest": "^25.2.1"
   },
   "devDependencies": {
     "@types/node": "^13.7.1",

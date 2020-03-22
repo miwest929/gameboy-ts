@@ -8,6 +8,15 @@ const VRAM_ADDR_BEGIN = 0x8000;
 const VRAM_ADDR_END = 0x9fff;
 const VRAM_SIZE_BYTES = VRAM_ADDR_END - VRAM_ADDR_BEGIN + 1;
 // Tiles are 8x8 pixels (64 pixels). Each pixel is 2 bits. In total, each tile takes up 128 bits (16 bytes).
+// Layout of VRAM
+/*
+8000-87FF	Tile set #1: tiles 0-127
+8800-8FFF	Tile set #1: tiles 128-255
+            Tile set #0: tiles -1 to -128
+9000-97FF	Tile set #0: tiles 0-127
+9800-9BFF	Tile map #0
+9C00-9FFF	Tile map #1
+*/
 
 // $FE00-FE9F
 const OAM_ADDR_BEGIN = 0xfe00;
@@ -52,33 +61,33 @@ class LCDCStatus {
     HBlankInterruptStatus: boolean; // enabled = true
     CoincidenceFlag: string; // 0:LYC<>LY (LYC_NEQ_LY), 1:LYC=LY ()   [READ_ONLY]
     ModeFlag: LCDC_MODES; // [READ_ONLY]
-     
+
     constructor() {
         this.ModeFlag = "NotInitialized"; // the mode flag is not set initially. It needs to be set during PPU.step function
     }
 
-    static parseLCDCStatusRegister(value: number): LCDCStatus {
-        /*const modeFlagValue = (0x03 & value);
-        let modeFlag;
-        if (modeFlagValue === 0)
-          modeFlag = "HBlankPeriod";
-        else if (modeFlagValue === 1)
-          modeFlag = "VBlankPeriod";
-        else if (modeFlagValue === 2)
-          modeFlag = "SearchingOAMPeriod";
-        else if (modeFlagValue === 3)
-          modeFlag = "SearchingVRAMPeriod"; */
+    // static parseLCDCStatusRegister(value: number): LCDCStatus {
+    //     /*const modeFlagValue = (0x03 & value);
+    //     let modeFlag;
+    //     if (modeFlagValue === 0)
+    //       modeFlag = "HBlankPeriod";
+    //     else if (modeFlagValue === 1)
+    //       modeFlag = "VBlankPeriod";
+    //     else if (modeFlagValue === 2)
+    //       modeFlag = "SearchingOAMPeriod";
+    //     else if (modeFlagValue === 3)
+    //       modeFlag = "SearchingVRAMPeriod"; */
       
-        let status = new LCDCStatus();
-        status.RawValue = value;
-        status.CoincidenceInterruptStatus = (value & 0x40) === 0x40;
-        status.OAMInterruptStatus = (value & 0x20) === 0x20;
-        status.VBlankInterruptStatus = (value & 0x10) === 0x10;
-        status.HBlankInterruptStatus = (value & 0x08) === 0x08;
-        status.CoincidenceFlag = (value & 0x04) === 0x04 ? 'LYC_EQ_LY' : 'LYC_NEQ_LY';
-        status.ModeFlag = "NotInitialized";
-        return status;
-    }
+    //     let status = new LCDCStatus();
+    //     status.RawValue = value;
+    //     status.CoincidenceInterruptStatus = (value & 0x40) === 0x40;
+    //     status.OAMInterruptStatus = (value & 0x20) === 0x20;
+    //     status.VBlankInterruptStatus = (value & 0x10) === 0x10;
+    //     status.HBlankInterruptStatus = (value & 0x08) === 0x08;
+    //     status.CoincidenceFlag = (value & 0x04) === 0x04 ? 'LYC_EQ_LY' : 'LYC_NEQ_LY';
+    //     status.ModeFlag = "NotInitialized";
+    //     return status;
+    // }
 
     update(value: number) {
         // don't touch the ModeFlag and the CoincidenceFlag
@@ -159,6 +168,11 @@ const OBP0_ADDR = 0xff48;
 // This register assigns gray shades for sprite palette 1. It works exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
 const OBP1_ADDR = 0xff49;
 
+// The window becomes visible (if enabled) when positions are set in range WX=0..166, WY=0..143.
+// A position of WX=7, WY=0 locates the window at upper left, it is then completely covering normal
+// background. WX values 0-6 and 166 are unreliable due to hardware bugs. If WX is set to 0, the window
+// will "stutter" horizontally when SCX changes. (Depending on SCX modulo 8, behavior is a little complicated
+// so you should try it yourself.)
 const WINDOWY_ADDR = 0xff4a;
 const WINDOWX_ADDR = 0xff4b;
 
@@ -198,8 +212,8 @@ class PPU {
     // ppu special registers
     public LY: number;
     public LX: number;
-    //public mode: LCDC_MODES;
-
+    public WINDOWY: number;
+    public WINDOWX: number;
     public SCROLL_Y: number;
     public SCROLL_X: number;
     public LCDC: number;
@@ -218,7 +232,7 @@ class PPU {
         this.LY = 0x00;
         this.LX = 0x00;
         this.LCDC = 0x00;
-        this.LCDC_STATUS = null;
+        this.LCDC_STATUS = new LCDCStatus();
     }
 
     public getScreenBufferData(): IScreenBuffer {
@@ -240,13 +254,13 @@ class PPU {
         } else if (addr === SCROLLX_ADDR) {
             this.SCROLL_X = value;
         } else if (addr === STAT_ADDR) {
-            if (this.LCDC_STATUS) {
-              this.LCDC_STATUS.update(value);
-            } else {
-              this.LCDC_STATUS = LCDCStatus.parseLCDCStatusRegister(value);
-            }
+            this.LCDC_STATUS.update(value);
         } else if (addr === BGP_ADDR) {
             this.BGP_PALETTE_DATA = parseBGPRegister(value);
+        } else if (addr === WINDOWY_ADDR) {
+            this.WINDOWY = value;
+        } else if (addr === WINDOWX_ADDR) {
+            this.WINDOWX = value;
         } else if (addr === OBP0_ADDR) {
         } else if (addr === OBP1_ADDR) {
         } else {
@@ -268,6 +282,10 @@ class PPU {
             return this.LCDC_STATUS.RawValue;
         } else if (addr === BGP_ADDR) {
             return this.BGP_PALETTE_DATA.RawValue;
+        } else if (addr === WINDOWY_ADDR) {
+            return this.WINDOWY;
+        } else if (addr === WINDOWX_ADDR) {
+            return this.WINDOWX;
         } else if (addr === OBP0_ADDR) {
         } else if (addr === OBP1_ADDR) {
         } else {

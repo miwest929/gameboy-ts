@@ -64,8 +64,10 @@ class MemoryBus {
             this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
         } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - OAM_ADDR_BEGIN, value);
-        } else if (addr >= 0xff40 && addr <= 0xff4a) {
+        } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
+        } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
+            console.warn("I/O Registers aren't supported yet");
         } else {
             this.memory.write(addr, value);
         }
@@ -614,6 +616,28 @@ class CPU {
 
             this.PC += 3;
             return 16;
+        } else if (currByte === 0x2A) {
+            // LD A, (HL+)     [1 byte, 8 cycles]
+            console.log("LD A, (HL+)");
+            this.A = this.bus.readByte(this.HL);
+            this.HL++;
+
+            this.PC++;
+            return 8;
+        } else if (currByte === 0xE2) {
+            // LD (C), A
+            console.log(`[${this.PC}] LD (C), A`);
+            this.bus.writeByte(0xFF00 + this.C, this.A);
+
+            this.PC++;
+            return 8;
+        } else if (currByte === 0xF2) {
+            // LD A, (C)
+            console.log(`[${this.PC}] LD A, (C)`);
+            this.A = this.bus.readByte(0xFF00 + this.C);
+
+            this.PC++;
+            return 8;
         }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
