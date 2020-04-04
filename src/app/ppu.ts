@@ -420,7 +420,11 @@ class PPU {
         // (even if you're not accessing the OAM RAM at all) will destroy the OAM RAM during OAM Search mode.
         // During this mode the CPU can't access the OAM RAM. If write nothing happens, If read then 0xFF is returned
         // But accessing VRAM during this mode is alright.
-        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod); 
+        this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod);
+
+        // perform OAM Search
+        const visibleObjects = this.performOAMSearch(this.LY);
+        console.log(`OAM Search found these 10 visible objects: ${visibleObjects.join(', ')}`);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
       } else {
@@ -445,7 +449,7 @@ class PPU {
 
               // render sprite (object) scan line
               if (this.LCDC_REGISTER.isObjSpriteDisplayOn()) {
-                 this.renderObjScanline();
+                 // this.renderObjScanline();
               }
           }
       }
@@ -468,18 +472,26 @@ class PPU {
         return this.vram[addr];
     }
 
-    private renderObjScanline() {
-        // OAM_ADDR_BEGIN, OAM_ADDR_END
-        // 64 -> 8x8
-        // 128 -> 8x16
-        const objSize = this.LCDC_REGISTER.objSpriteSize();
+    // @param ly: number : the current scanline
+    // @return number[] : Return the tileIds of up to 10 visible objects
+    private performOAMSearch(ly: number): number[] {
+        // searches OAM RAM
+        const visibleObjs = [];
         for (let objId = 39; objId >= 0; objId--) {
-            // Each object is 4 bytes
-            const offset = /*OAM_ADDR_BEGIN +*/ (4 * objId);
-            const y: number = this.oam[offset] - 16;
-            const x: number = this.oam[offset + 1] - 8;
-            const tileId: number = this.oam[offset + 2];
-            const flags: number = this.oam[offset + 3];
+            const offset = 4 * objId;
+            const oam = new OAMEntry([
+                this.oam[offset],
+                this.oam[offset + 1],
+                this.oam[offset + 2],
+                this.oam[offset + 3]
+            ]);
+
+            // check if obj is visible
+            if (oam.x() !== 0 && (ly + 16) >= oam.y() && (ly + 16) < (oam.y() + 8)) {
+                visibleObjs.push(oam.tileId());
+            }
         }
+
+        return visibleObjs;
     }
 }

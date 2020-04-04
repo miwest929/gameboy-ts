@@ -58,8 +58,12 @@ class MemoryBus {
     }
 
     public writeByte(addr: number, value: number) {
-        // if writing to memory mapped vram
+        // TODO: Implement Echo Ram 0xE000 - 0xFDFF. It's a mirror of WRAM addr 0xC000 - 0xDDFF
+        //       Typically not used. Writing to an echo address causes a write to that AND write to associated address in WRAM.
+        //       And vice versa.
+
         if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
+            // if writing to memory mapped vram
             console.log("WRITING TO VRAM!!");
             this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
         } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
