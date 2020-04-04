@@ -64,6 +64,11 @@ class MemoryBus {
             this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
         } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - OAM_ADDR_BEGIN, value);
+        } else if (addr === 0xff46) { // DMA Transfer and Start Address
+            // Initiate DMA Transfer.
+            // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
+            // Dest. address range is 0xFE00 - 0xFE9F
+            this.performDMAOAMTransfer(value);
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
@@ -82,6 +87,15 @@ class MemoryBus {
             return this.ppu.readFromSpecialRegister(addr);
         } else {
             return this.memory.read(addr);
+        }
+    }
+
+    private performDMAOAMTransfer(baseSrcAddr: number) {
+        const srcAddrStart: number = (baseSrcAddr << 8) | 0x00;
+        console.log(`Performing DMA OAM Transfer from addr ${srcAddrStart} - ${srcAddrStart + 0x9F} to oam addr ${0xFE00} - ${0xFE9F}`);
+        for (let offsetAddr = 0x00; offsetAddr <= 0x9F; offsetAddr++) {
+            const value = this.memory.read(srcAddrStart + offsetAddr);
+            this.ppu.writeToOAM(0xFE00 + offsetAddr, value);
         }
     }
 }

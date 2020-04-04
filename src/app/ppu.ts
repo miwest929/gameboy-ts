@@ -31,6 +31,57 @@ const OAM_ADDR_BEGIN = 0xfe00;
 const OAM_ADDR_END = 0xfe9f;
 const OAM_SIZE_BYTES = OAM_ADDR_END - OAM_ADDR_BEGIN + 1;
 
+class OAMEntry {
+    private RawBytes: number[];
+
+    constructor(bytes: number[]) {
+        if (bytes.length !== 4) {
+           throw `Error: Each OAM Entry must be exactly 4 bytes. Received ${bytes.length} bytes instead`;
+        }
+
+        this.RawBytes = [bytes[0], bytes[1], bytes[2], bytes[3]]; 
+    }
+
+    public x(): number {
+        return this.RawBytes[1] - 8;
+    }
+
+    public y(): number {
+        return this.RawBytes[0] - 16;
+    }
+
+    public tileId(): number {
+        return this.RawBytes[2];
+    }
+
+    public ObjBGPriority(): number {
+        if ((this.RawBytes[3] & 0x80) === 0x80) {
+            // OBJ Behind BG color 1-3
+            return 1;
+        } else {
+            // OBJ Above BG
+            return 0;
+        }
+    }
+
+    public isYFlipped(): boolean {
+        return (this.RawBytes[3] & 0x40) === 0x40;
+    }
+
+    public isXFlipped(): boolean {
+        return (this.RawBytes[3] & 0x20) === 0x20;
+    }
+
+    // returns the address of this objs palette
+    public paletteAddr(): number {
+        if ((this.RawBytes[3] & 0x10) === 0x10) {
+            return 0xFF49;
+        } else {
+            return 0xFF48;
+        }
+    }
+}
+
 // Graphics Special Registers
 
 const LCDC_ADDR = 0xff40;
@@ -121,7 +172,9 @@ const LCDC_MODES = {
     SearchingOAMPeriod: "SearchingOAMPeriod",   // 2
     SearchingVRAMPeriod: "SearchingVRAMPeriod"  // 3
 } as const;
+
 type LCDC_MODES = typeof LCDC_MODES[keyof typeof LCDC_MODES];
+
 class LCDCStatus {
     RawValue: number;
     CoincidenceInterruptStatus: boolean; // enabled = true
@@ -134,29 +187,6 @@ class LCDCStatus {
     constructor() {
         this.ModeFlag = "NotInitialized"; // the mode flag is not set initially. It needs to be set during PPU.step function
     }
-
-    // static parseLCDCStatusRegister(value: number): LCDCStatus {
-    //     /*const modeFlagValue = (0x03 & value);
-    //     let modeFlag;
-    //     if (modeFlagValue === 0)
-    //       modeFlag = "HBlankPeriod";
-    //     else if (modeFlagValue === 1)
-    //       modeFlag = "VBlankPeriod";
-    //     else if (modeFlagValue === 2)
-    //       modeFlag = "SearchingOAMPeriod";
-    //     else if (modeFlagValue === 3)
-    //       modeFlag = "SearchingVRAMPeriod"; */
-      
-    //     let status = new LCDCStatus();
-    //     status.RawValue = value;
-    //     status.CoincidenceInterruptStatus = (value & 0x40) === 0x40;
-    //     status.OAMInterruptStatus = (value & 0x20) === 0x20;
-    //     status.VBlankInterruptStatus = (value & 0x10) === 0x10;
-    //     status.HBlankInterruptStatus = (value & 0x08) === 0x08;
-    //     status.CoincidenceFlag = (value & 0x04) === 0x04 ? 'LYC_EQ_LY' : 'LYC_NEQ_LY';
-    //     status.ModeFlag = "NotInitialized";
-    //     return status;
-    // }
 
     update(value: number) {
         // don't touch the ModeFlag and the CoincidenceFlag
@@ -275,7 +305,14 @@ const ACCESSING_VRAM_CYCLES = 172;
 // The V-Blank interrupt occurs ca. 59.7 times a second on a handheld Game Boy. This interrupt occurs at the beginning of the V-Blank period (LY=144)
 class PPU {
     public buffer: number[][];
+
+    /*
+      This memory contains OBJ Tiles (4KB), BG Tiles (4KB), BG Map (1KB), Window Map (1KB) 
+      The LCDC register determines how vram is allocated to the 4 sections.
+    */
     private vram: Uint8Array;
+
+
     private oam: Uint8Array;
 
     // ppu special registers
@@ -371,6 +408,18 @@ class PPU {
       } else if (this.LY >= 144) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.VBlankPeriod);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES) {
+        // OAM Search is 20 cycles long. Happens at beginning of each scanline
+        // For every line the PPU has to decide which Objects are visible in that line.
+        // 40 objects total in system. It has to filter those objects to find those that are visible in that line
+        // and put into an array of up to 10 sprites that are visible.
+        // An object is visible when the following is true:
+        // 1. oam.x != 0
+        // 2. LY (current line we're rendering) + 16  >= oam.y
+        // 3. LY + 16 < oam.y + h
+        // The original gameboy has a wierd OAM Search CPU bug. If you do any 16-bit calculations with numbers between FE00 and FEFF
+        // (even if you're not accessing the OAM RAM at all) will destroy the OAM RAM during OAM Search mode.
+        // During this mode the CPU can't access the OAM RAM. If write nothing happens, If read then 0xFF is returned
+        // But accessing VRAM during this mode is alright.
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod); 
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
@@ -384,16 +433,20 @@ class PPU {
           this.LY += 1;
 
           if (this.LY === 144) {
-
+            // request_interrupt(INTERRUPT_VBLANK);
           } else if (this.LY > 153) {
               this.LY = 0;
           }
 
-		  //Render scanline
+		  // Render scanline
 		  if (this.LY < 144) {
               // render background scan line
               // render window scan line
+
               // render sprite (object) scan line
+              if (this.LCDC_REGISTER.isObjSpriteDisplayOn()) {
+                 this.renderObjScanline();
+              }
           }
       }
     }
@@ -413,5 +466,20 @@ class PPU {
 
     public readFromVRAM(addr: number) {
         return this.vram[addr];
+    }
+
+    private renderObjScanline() {
+        // OAM_ADDR_BEGIN, OAM_ADDR_END
+        // 64 -> 8x8
+        // 128 -> 8x16
+        const objSize = this.LCDC_REGISTER.objSpriteSize();
+        for (let objId = 39; objId >= 0; objId--) {
+            // Each object is 4 bytes
+            const offset = /*OAM_ADDR_BEGIN +*/ (4 * objId);
+            const y: number = this.oam[offset] - 16;
+            const x: number = this.oam[offset + 1] - 8;
+            const tileId: number = this.oam[offset + 2];
+            const flags: number = this.oam[offset + 3];
+        }
     }
 }
