@@ -1,5 +1,13 @@
 //import { multiDimRepeat } from './utils';
 
+/*class Screen {
+    private buffer: number[][];
+
+    constructor() {
+        this.buffer = 
+    }
+}*/
+
 const GB_SCREEN_WIDTH_IN_PX = 160;
 const GB_SCREEN_HEIGHT_IN_PX = 144;
 
@@ -24,15 +32,76 @@ const OAM_ADDR_END = 0xfe9f;
 const OAM_SIZE_BYTES = OAM_ADDR_END - OAM_ADDR_BEGIN + 1;
 
 // Graphics Special Registers
+
 const LCDC_ADDR = 0xff40;
-const LCDC_ENABLED_FLAG = 0x80;
-const LCDC_WINDOW_TILE_MAP_DISPLAY_SELECT_FLAG = 0x40;
-const LCDC_WINDOW_DISPLAY_FLAG = 0x20;
-const LCDC_BG_WINDOW_TILE_DATA_SELECT_FLAG = 0x10;
-const LCDC_BG_TILE_MAP_DISPLAY_SELECT_FLAG = 0x08;
-const LCDC_OBJ_SPRITE_SIZE_FLAG = 0x04;
-const LCDC_OBJ_SPRITE_DISPLAY_FLAG = 0x02;
-const LCDC_BG_WINDOW_DISPLAY_FLAG = 0x01;
+const INITIAL_LCDC_VALUE = 0x00;
+class LCDC {
+    public RawValue: number;
+
+    constructor() {
+        this.RawValue = INITIAL_LCDC_VALUE;
+    }
+    /*
+        7    6    5    4   |  3    2    1    0       
+        x    x    x    x   |  x    x    x    x
+       0x80 0x40 0x20 0x10 | 0x08 0x04 0x02 0x01
+    */
+    public update(value: number) {
+        this.RawValue = value;
+    }
+
+    public isDisplayOn(): boolean { // bit 7
+        return (this.RawValue & 0x80) === 0x80;
+    }
+
+    // @return number[] -> beginAddress and endAddress of the window tile map. Returned as two-element array
+    public windowTileMapDisplayAddr(): number[] { // bit 6
+        if ((this.RawValue & 0x40) === 0x40) { // flag is on
+            return [0x9C00, 0x9FFF];
+        } else {
+            return [0x9800, 0x9BFF];
+        }
+    }
+
+    public isWindowDisplayOn(): boolean { // bit 5
+        return (this.RawValue & 0x20) === 0x20;
+    }
+
+    public backgroundAndWindowTileAddr(): number[] { // bit 4
+        if ((this.RawValue & 0x10) === 0x10) { // flag is on
+            return [0x8000, 0x8FFF];
+        } else {
+            return [0x8800, 0x97FF];
+        }
+    }
+
+    public backgroundTileMapDisplayAddr(): number[] { // bit 3
+        if ((this.RawValue & 0x08) === 0x08) { // flag is on
+            return [0x9C00, 0x9FFF];
+        } else {
+            return [0x9800, 0x9BFF];
+        }
+    }
+
+    // @return number: spriteWidth * spriteHeight
+    public objSpriteSize(): number { // bit 2
+        if ((this.RawValue & 0x04) === 0x04) { // flag is on
+            // width=8, height=16
+            return 128;
+        } else {
+            // width=8, height=8
+            return 64;
+        }
+    }
+
+    public isObjSpriteDisplayOn(): boolean { // bit 1
+        return (this.RawValue & 0x02) === 0x02;
+    }
+
+    public isBackgroundAndWindowDisplayOn(): boolean { // bit 0
+        return (this.RawValue & 0x01) === 0x01;
+    }
+}
 
 // Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
 //  Bit 5 - Mode 2 OAM Interrupt         (1=Enable) (Read/Write)
@@ -216,7 +285,7 @@ class PPU {
     public WINDOWX: number;
     public SCROLL_Y: number;
     public SCROLL_X: number;
-    public LCDC: number;
+    public LCDC_REGISTER: LCDC;
     public BGP_PALETTE_DATA: IBGP; // TODO: initialize to the correct initial value
     public LCDC_STATUS: LCDCStatus; // TODO: initialize to the correct initial value
 
@@ -231,7 +300,7 @@ class PPU {
         this.clock = 0x00;
         this.LY = 0x00;
         this.LX = 0x00;
-        this.LCDC = 0x00;
+        this.LCDC_REGISTER = new LCDC();
         this.LCDC_STATUS = new LCDCStatus();
     }
 
@@ -246,7 +315,7 @@ class PPU {
     public writeSpecialRegister(addr: number, value: number) {
         if (addr === LCDC_ADDR) {
             console.log("WRITE TO the LCDC special register");
-            this.LCDC = value;
+            this.LCDC_REGISTER.update(value);
         } else if (addr === LY_ADDR) {
             // ignore. this is a read-only register
         } else if (addr === SCROLLY_ADDR) {
@@ -270,7 +339,7 @@ class PPU {
 
     public readFromSpecialRegister(addr: number): number {
         if (addr === LCDC_ADDR) {
-            return this.LCDC;
+            return this.LCDC_REGISTER.RawValue;
         } else if (addr === LY_ADDR) {
             console.log("READ the LY special register");
             return this.LY;
@@ -293,16 +362,12 @@ class PPU {
         }
     }
 
-    public isDisplayOn(): boolean {
-      return (this.LCDC & 0x80) === 0x80;
-    }
-
     public step(cycles: number) {
-      if (!this.isDisplayOn()) {
+      if (!this.LCDC_REGISTER.isDisplayOn()) {
 		this.LY = 0;
         this.clock = 456;
-        
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.HBlankPeriod);
+        return;
       } else if (this.LY >= 144) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.VBlankPeriod);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES) {
@@ -311,10 +376,6 @@ class PPU {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
       } else {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.HBlankPeriod);
-      }
-
-      if (!this.isDisplayOn()) {
-          return;
       }
 
       this.clock -= cycles;
@@ -338,7 +399,8 @@ class PPU {
     }
 
     public writeToOAM(addr: number, value: number) {
-        this.oam[addr] = value
+        const normalizedAddr = addr & 0x009F; // make address between 0 and 159
+        this.oam[normalizedAddr] = value
     }
 
     public readFromOAM(addr: number) {
