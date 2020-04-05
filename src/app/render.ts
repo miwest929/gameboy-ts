@@ -21,6 +21,21 @@ function render(ctx: CanvasRenderingContext2D, screenBuffer: IScreenBuffer) {
 const gameboy = new Gameboy();
 const cart = new Cartridge('tetris');
 
+const getOAMHtml = () => {
+    let html = '';
+    for (let objId = 39; objId >= 0; objId--) {
+        const offset = 4 * objId;
+        const oam = new OAMEntry([
+            gameboy.ppu.oam[offset],
+            gameboy.ppu.oam[offset + 1],
+            gameboy.ppu.oam[offset + 2],
+            gameboy.ppu.oam[offset + 3]
+        ]);
+        html += `<p class='regvalue'>X=${oam.x()}, Y=${oam.y()}, tileId=${oam.tileId()}, isXFlipped=${oam.isXFlipped()}, isYFlipped=${oam.isYFlipped()}<p>`;
+    }
+    return html;
+}
+
 const renderPPUInfo = () => {
     const isEmpty = $('#ppuInfo > div').length === 0;
     const ppuInfo = $('#ppuInfo');
@@ -31,12 +46,17 @@ const renderPPUInfo = () => {
         ppuInfo.html(`
         <div><span class='regname'>LY</span><p class='regvalue' id='ly'>${gameboy.ppu.LY}</p></div>
         <div><span class='regname'>LX</span><p class='regvalue' id='lx'>${gameboy.ppu.LX}</p></div>
-        <div><span class='regname'>LCDC</span><p class='regvalue' id='lcdc'>${gameboy.ppu.LCDC}</p  ></div>
+        <div><span class='regname'>LCDC</span><p class='regvalue' id='lcdc'>${gameboy.ppu.LCDC_REGISTER.RawValue}</p></div>
+        <div><span class='regname'>OAM RAM</span>
+            <div>
+              ${getOAMHtml()}
+            </div>
+        </div>
         `);
     } else {
         $('#ly').text(gameboy.ppu.LY);
         $('#lx').text(gameboy.ppu.LX);
-        $('#lcdc').text(gameboy.ppu.LCDC);
+        $('#lcdc').text(gameboy.ppu.LCDC_REGISTER.RawValue);
     }
 }
 

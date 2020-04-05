@@ -313,7 +313,7 @@ class PPU {
     private vram: Uint8Array;
 
 
-    private oam: Uint8Array;
+    public oam: Uint8Array;
 
     // ppu special registers
     public LY: number;
@@ -487,6 +487,7 @@ class PPU {
             ]);
 
             // check if obj is visible
+            // TODO: This assumes that objects are 8x8. won't work when LCDC register declares all objs to be 8x16
             if (oam.x() !== 0 && (ly + 16) >= oam.y() && (ly + 16) < (oam.y() + 8)) {
                 visibleObjs.push(oam.tileId());
             }

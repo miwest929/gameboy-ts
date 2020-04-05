@@ -1,5 +1,5 @@
 
-describe('ppu', () => {
+/*describe('ppu', () => {
   describe('LCDCStatus', () => {
     test('mode flag is initialized to NotInitialized', () => {
       const status = new LCDCStatus();
@@ -26,4 +26,4 @@ describe('ppu', () => {
         expect(status.HBlankInterruptStatus).toBe(false);
     });
   });
-});
+});*/
