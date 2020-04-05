@@ -89,12 +89,12 @@ const renderCPUInfo = () => {
     }
 }
 
-const renderEmulatorInfo = () => {
+function renderEmulatorInfo() {
     renderCPUInfo();
     renderPPUInfo();
 }
 
-const emulatorNextStep = () => {
+function emulatorNextStep() {
     // TODO: Lame attempt at breakpoints
     // while (gameboy.cpu.PC <= 666) {
         gameboy.executeNextStep();

@@ -1,6 +1,6 @@
-//declare const jQuery : any;
+import * as fs from 'fs';
 
-function loadRom(romName: string): Promise<Uint8Array> {
+export function loadRom(romName: string): Promise<Uint8Array> {
     return new Promise(function(resolve, reject) {
         $.ajax({
             url: `http://localhost:8081/${romName}.gb.base64`,
@@ -18,5 +18,10 @@ function loadRom(romName: string): Promise<Uint8Array> {
             }
          });
     });
+}
 
+export function loadRomFromFileSystem(romName: string): Uint8Array {
+  console.log(`Reading ROM bytes for rom ${romName}`);
+  const buffer = fs.readFileSync(romName);
+  return Uint8Array.from(buffer);
 }

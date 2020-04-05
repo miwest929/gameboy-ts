@@ -8,7 +8,11 @@
     "test": "jest"
   },
   "dependencies": {
-    "@types/jquery": "^3.3.33"
+    "@types/jquery": "^3.3.33",
+    "@types/text-encoding": "0.0.35",
+    "text-encoder": "0.0.4",
+    "text-encoding": "^0.7.0",
+    "ts-node": "^8.8.2"
   },
   "devDependencies": {
     "@types/node": "^13.7.1",

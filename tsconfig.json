@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "lib": ["es2016", "dom"],
-    "module": "none",
+    "module": "CommonJS",
     "outDir": "src/js",
   },
   "include": ["src/app"]

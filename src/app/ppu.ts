@@ -1,4 +1,4 @@
-//import { multiDimRepeat } from './utils';
+import { multiDimRepeat } from './utils';
 
 /*class Screen {
     private buffer: number[][];
@@ -11,10 +11,37 @@
 const GB_SCREEN_WIDTH_IN_PX = 160;
 const GB_SCREEN_HEIGHT_IN_PX = 144;
 
+export enum Address {
+    VRAM_ADDR_BEGIN = 0x8000,
+    VRAM_ADDR_END = 0x9fff,
+    OAM_ADDR_BEGIN = 0xfe00, // Object Attribute Memory are stored in addresses 0xFE00-0xFE9F
+    OAM_ADDR_END = 0xfe9f,
+    LCDC_ADDR = 0xff40,
+    STAT_ADDR = 0xff41, // LCDC Status (R/W)
+    SCROLLY_ADDR = 0xff42,
+    SCROLLX_ADDR = 0xff43,
+    LY_ADDR = 0xff44,
+    LYC_ADDR = 0xff45,
+    DMA_ADDR = 0xff46,
+
+    // The window becomes visible (if enabled) when positions are set in range WX=0..166, WY=0..143.
+    // A position of WX=7, WY=0 locates the window at upper left, it is then completely covering normal
+    // background. WX values 0-6 and 166 are unreliable due to hardware bugs. If WX is set to 0, the window
+    // will "stutter" horizontally when SCX changes. (Depending on SCX modulo 8, behavior is a little complicated
+    // so you should try it yourself.)
+    WINDOWY_ADDR = 0xff4a,
+    WINDOWX_ADDR = 0xff4b,
+    BGP_ADDR = 0xff47,
+    OBP0_ADDR = 0xff48, // FF48 - OBP0 - Object Palette 0 Data (R/W) - Non CGB Mode Only
+                        // This register assigns gray shades for sprite palette 0. It works
+                        // exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
+    OBP1_ADDR = 0xff49 // FF49 - OBP1 - Object Palette 1 Data (R/W) - Non CGB Mode Only
+                       // This register assigns gray shades for sprite palette 1. It works exactly as BGP (FF47), except
+                       // that the lower two bits aren't used because sprite data 00 is transparent.
+}
+
 // NOTE: When the display is disabled, both VRAM and OAM are accessible at any time
-const VRAM_ADDR_BEGIN = 0x8000;
-const VRAM_ADDR_END = 0x9fff;
-const VRAM_SIZE_BYTES = VRAM_ADDR_END - VRAM_ADDR_BEGIN + 1;
+export const VRAM_SIZE_BYTES = Address.VRAM_ADDR_END - Address.VRAM_ADDR_BEGIN + 1;
 // Tiles are 8x8 pixels (64 pixels). Each pixel is 2 bits. In total, each tile takes up 128 bits (16 bytes).
 // Layout of VRAM
 /*
@@ -26,10 +53,7 @@ const VRAM_SIZE_BYTES = VRAM_ADDR_END - VRAM_ADDR_BEGIN + 1;
 9C00-9FFF	Tile map #1
 */
 
-// $FE00-FE9F
-const OAM_ADDR_BEGIN = 0xfe00;
-const OAM_ADDR_END = 0xfe9f;
-const OAM_SIZE_BYTES = OAM_ADDR_END - OAM_ADDR_BEGIN + 1;
+const OAM_SIZE_BYTES = Address.OAM_ADDR_END - Address.OAM_ADDR_BEGIN + 1;
 
 class OAMEntry {
     private RawBytes: number[];
@@ -84,7 +108,6 @@ class OAMEntry {
 
 // Graphics Special Registers
 
-const LCDC_ADDR = 0xff40;
 const INITIAL_LCDC_VALUE = 0x00;
 class LCDC {
     public RawValue: number;
@@ -164,7 +187,6 @@ class LCDC {
 //            1: During V-Blank
 //            2: During Searching OAM
 //            3: During Transferring Data to LCD Driver
-const STAT_ADDR = 0xff41; // LCDC Status (R/W)
 const LCDC_MODES = {
     NotInitialized: "NotInitialized",
     HBlankPeriod: "HBlankPeriod",               // 0
@@ -213,12 +235,6 @@ class LCDCStatus {
     }
 }
 
-const SCROLLY_ADDR = 0xff42;
-const SCROLLX_ADDR = 0xff43;
-const LY_ADDR = 0xff44;
-const LYC_ADDR = 0xff45;
-const DMA_ADDR = 0xff46;
-
 // FF47 - BGP - BG Palette Data (R/W) - Non CGB Mode Only
 // Bit 7-6 - Shade for Color Number 3
 // Bit 5-4 - Shade for Color Number 2
@@ -229,7 +245,6 @@ const DMA_ADDR = 0xff46;
 //  1  Light gray
 //  2  Dark gray
 //  3  Black
-const BGP_ADDR = 0xff47;
 const BGP_COLORS = {
     White: 0,
     LightGray: 1,
@@ -259,22 +274,6 @@ const parseBGPRegister = (value: number): IBGP => {
     };
 }
 
-// FF48 - OBP0 - Object Palette 0 Data (R/W) - Non CGB Mode Only
-// This register assigns gray shades for sprite palette 0. It works exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
-const OBP0_ADDR = 0xff48;
-
-// FF49 - OBP1 - Object Palette 1 Data (R/W) - Non CGB Mode Only
-// This register assigns gray shades for sprite palette 1. It works exactly as BGP (FF47), except that the lower two bits aren't used because sprite data 00 is transparent.
-const OBP1_ADDR = 0xff49;
-
-// The window becomes visible (if enabled) when positions are set in range WX=0..166, WY=0..143.
-// A position of WX=7, WY=0 locates the window at upper left, it is then completely covering normal
-// background. WX values 0-6 and 166 are unreliable due to hardware bugs. If WX is set to 0, the window
-// will "stutter" horizontally when SCX changes. (Depending on SCX modulo 8, behavior is a little complicated
-// so you should try it yourself.)
-const WINDOWY_ADDR = 0xff4a;
-const WINDOWX_ADDR = 0xff4b;
-
 // Color codes
 //  0b11 | white      |
 const WHITE_PIXEL = 0x3;
@@ -303,7 +302,7 @@ const ACCESSING_OAM_CYCLES = 80;
 const ACCESSING_VRAM_CYCLES = 172;
 
 // The V-Blank interrupt occurs ca. 59.7 times a second on a handheld Game Boy. This interrupt occurs at the beginning of the V-Blank period (LY=144)
-class PPU {
+export class PPU {
     public buffer: number[][];
 
     /*
@@ -350,50 +349,50 @@ class PPU {
     }
 
     public writeSpecialRegister(addr: number, value: number) {
-        if (addr === LCDC_ADDR) {
+        if (addr === Address.LCDC_ADDR) {
             console.log("WRITE TO the LCDC special register");
             this.LCDC_REGISTER.update(value);
-        } else if (addr === LY_ADDR) {
+        } else if (addr === Address.LY_ADDR) {
             // ignore. this is a read-only register
-        } else if (addr === SCROLLY_ADDR) {
+        } else if (addr === Address.SCROLLY_ADDR) {
             this.SCROLL_Y = value
-        } else if (addr === SCROLLX_ADDR) {
+        } else if (addr === Address.SCROLLX_ADDR) {
             this.SCROLL_X = value;
-        } else if (addr === STAT_ADDR) {
+        } else if (addr === Address.STAT_ADDR) {
             this.LCDC_STATUS.update(value);
-        } else if (addr === BGP_ADDR) {
+        } else if (addr === Address.BGP_ADDR) {
             this.BGP_PALETTE_DATA = parseBGPRegister(value);
-        } else if (addr === WINDOWY_ADDR) {
+        } else if (addr === Address.WINDOWY_ADDR) {
             this.WINDOWY = value;
-        } else if (addr === WINDOWX_ADDR) {
+        } else if (addr === Address.WINDOWX_ADDR) {
             this.WINDOWX = value;
-        } else if (addr === OBP0_ADDR) {
-        } else if (addr === OBP1_ADDR) {
+        } else if (addr === Address.OBP0_ADDR) {
+        } else if (addr === Address.OBP1_ADDR) {
         } else {
             console.error(`Don't support writing to special reg at addr ${addr}`);
         }
     }
 
     public readFromSpecialRegister(addr: number): number {
-        if (addr === LCDC_ADDR) {
+        if (addr === Address.LCDC_ADDR) {
             return this.LCDC_REGISTER.RawValue;
-        } else if (addr === LY_ADDR) {
+        } else if (addr === Address.LY_ADDR) {
             console.log("READ the LY special register");
             return this.LY;
-        } else if (addr === SCROLLY_ADDR) {
+        } else if (addr === Address.SCROLLY_ADDR) {
             return this.SCROLL_Y;
-        } else if (addr === SCROLLX_ADDR) {
+        } else if (addr === Address.SCROLLX_ADDR) {
             return this.SCROLL_X;
-        } else if (addr === STAT_ADDR) {
+        } else if (addr === Address.STAT_ADDR) {
             return this.LCDC_STATUS.RawValue;
-        } else if (addr === BGP_ADDR) {
+        } else if (addr === Address.BGP_ADDR) {
             return this.BGP_PALETTE_DATA.RawValue;
-        } else if (addr === WINDOWY_ADDR) {
+        } else if (addr === Address.WINDOWY_ADDR) {
             return this.WINDOWY;
-        } else if (addr === WINDOWX_ADDR) {
+        } else if (addr === Address.WINDOWX_ADDR) {
             return this.WINDOWX;
-        } else if (addr === OBP0_ADDR) {
-        } else if (addr === OBP1_ADDR) {
+        } else if (addr === Address.OBP0_ADDR) {
+        } else if (addr === Address.OBP1_ADDR) {
         } else {
             console.error(`Don't support reading to special reg at addr ${addr}`);
         }

@@ -1,3 +1,7 @@
+import { loadRomFromFileSystem, loadRom } from './rom_loader';
+import { uInt8ArrayToUtf8 } from './utils';
+import { PPU, Address } from './ppu';
+
 /*
 References:
   - https://www.reddit.com/r/Gameboy/comments/29o7rx/what_does_dmg_mean/
@@ -62,12 +66,12 @@ class MemoryBus {
         //       Typically not used. Writing to an echo address causes a write to that AND write to associated address in WRAM.
         //       And vice versa.
 
-        if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
+        if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
             // if writing to memory mapped vram
             console.log("WRITING TO VRAM!!");
-            this.ppu.writeToVRAM(addr - VRAM_ADDR_BEGIN, value);
-        } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
-            this.ppu.writeToOAM(addr - OAM_ADDR_BEGIN, value);
+            this.ppu.writeToVRAM(addr - Address.VRAM_ADDR_BEGIN, value);
+        } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
+            this.ppu.writeToOAM(addr - Address.OAM_ADDR_BEGIN, value);
         } else if (addr === 0xff46) { // DMA Transfer and Start Address
             // Initiate DMA Transfer.
             // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
@@ -83,10 +87,10 @@ class MemoryBus {
     }
 
     public readByte(addr: number): number {
-        if (addr >= VRAM_ADDR_BEGIN && addr <= VRAM_ADDR_END) {
-            return this.ppu.readFromVRAM(addr - VRAM_ADDR_BEGIN);
-        } else if (addr >= OAM_ADDR_BEGIN && addr <= OAM_ADDR_END) {
-            return this.ppu.readFromOAM(addr - OAM_ADDR_BEGIN);
+        if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
+            return this.ppu.readFromVRAM(addr - Address.VRAM_ADDR_BEGIN);
+        } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
+            return this.ppu.readFromOAM(addr - Address.OAM_ADDR_BEGIN);
         } else if (addr >= 0xff40 && addr <= 0xff4a) {
             return this.ppu.readFromSpecialRegister(addr);
         } else {
@@ -694,7 +698,7 @@ class CPU {
 const ROM_BANK_0_START_ADDR = 0x0000;
 const ROM_BANK_0_END_ADDR = 0x3FFF;
 
-class Gameboy {
+export class Gameboy {
   public cartridge: Cartridge;
   public memory: Memory;
   public bus: MemoryBus;
@@ -736,11 +740,22 @@ class Gameboy {
   }
 
   public executeRom() {
+    let keepRunning = true;
     this.cyclesCounter = 0;
-    while (true) {
+
+    while (keepRunning) {
       // ExecuteNextInstruction will modify the PC register appropriately
-      this.cyclesCounter += this.cpu.executeNextStep();
+      const cycles = this.cpu.executeNextStep();
+      if (cycles === 0) {
+          keepRunning = false;
+          continue;
+      }
+
+      this.cyclesCounter += cycles;
+      this.ppu.step(this.cyclesCounter);
     }
+
+    console.log('CPU stopped executing. Most likely due to executing instruction error');
   }
 
   // when cart is loaded its code is memory mapped to
@@ -748,6 +763,7 @@ class Gameboy {
   // addresses 0000-3FFF is ROM Bank 00 (read-only)
   // which contains the Interrupt Table, and Header Information
   public async loadCartridge(cart: Cartridge) {
+      console.log('inside loadCartridge');
       this.cartridge = cart;
       await this.cartridge.load();
 
@@ -781,18 +797,24 @@ interface IRomHeader {
 const HEADER_TITLE_START_ADDR = 0x0134;
 const HEADER_TITLE_END_ADDR = 0x0143;
 
-class Cartridge {
+export class Cartridge {
     public romBytes: Uint8Array;
     public romName: string;
     public isLoaded: boolean;
+    public fromLocalFileSystem: boolean;
 
-    constructor(name: string) {
+    constructor(name: string, fromLocalFileSystem: boolean = false) {
         this.romName = name;
         this.isLoaded = true;
+        this.fromLocalFileSystem = fromLocalFileSystem;
     }
 
     public async load() {
-        this.romBytes = await loadRom('tetris');
+        if (this.fromLocalFileSystem) {
+            this.romBytes = loadRomFromFileSystem(this.romName);
+        } else {
+           this.romBytes = await loadRom('tetris');
+        }
         this.isLoaded = true;
     }
 
