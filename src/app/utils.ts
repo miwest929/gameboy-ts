@@ -21,3 +21,9 @@ export function uInt8ArrayToUtf8(bytes: Uint8Array): string {
     let utf8decoder = new textEncoding.TextDecoder();
     return utf8decoder.decode(bytes);
 }
+
+export function sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+} 

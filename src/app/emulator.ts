@@ -1,5 +1,5 @@
 import { loadRomFromFileSystem, loadRom } from './rom_loader';
-import { uInt8ArrayToUtf8 } from './utils';
+import { uInt8ArrayToUtf8, sleep } from './utils';
 import { PPU, Address } from './ppu';
 
 /*
@@ -247,6 +247,8 @@ class CPU {
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     // @return cyclesConsumed: number = The number of cycles the just executed instruction took
     public executeInstruction(): number {
+        process.stdout.write(`[${this.PC}]: `); // print out the address (no newline)
+
         const currByte = this.bus.readByte(this.PC);
     	if (currByte === 0x31) {
             // LD SP, N
@@ -339,16 +341,16 @@ class CPU {
             this.PC += 2;
             if (!this.getFlag(ZERO_FLAG)) {
 
-                console.log(`[${this.PC}]: JR NZ, ${offset} [jumped]`);
+                console.log(`JR NZ, ${offset} [jumped]`);
                 this.PC += offset;
                 return 12;
             } else {
-                console.log(`[${this.PC}]: JR NZ, ${offset} [not jumped]`);
+                console.log(`JR NZ, ${offset} [not jumped]`);
                 return 8;
             }
         } else if (currByte === 0x0D) {
             // DEC C
-            console.log(`[${this.PC}]: DEC C`);
+            console.log(`DEC C`);
 
             const result = wrappingByteSub(this.C, 1);
             this.updateHalfCarryFlag(this.C, 1);
@@ -361,7 +363,7 @@ class CPU {
             return 4;
         } else if (currByte === 0x1D) {
             // DEC E
-            console.log(`[${this.PC}]: DEC E`);
+            console.log(`DEC E`);
 
             const result = wrappingByteSub(this.E, 1);
             this.updateHalfCarryFlag(this.E, 1);
@@ -585,7 +587,7 @@ class CPU {
             // LD A, d8
             let value = this.bus.readByte(this.PC + 1);
             this.A = value;
-            console.log(`[${this.PC}] LD A, ${value}`);
+            console.log(`LD A, ${value}`);
             this.PC += 2;
             return 8;
         } else if (currByte === 0xF3) {
@@ -598,14 +600,14 @@ class CPU {
             // LDH (a8),A
             let value = this.bus.readByte(this.PC + 1);
             this.bus.writeByte(0xFF00 + value, this.A);
-            console.log(`[${this.PC}] LDH (${0xFF00 + value}), A`);
+            console.log(`LDH (${0xFF00 + value}), A`);
             this.PC += 2;
             return 12;
         } else if (currByte === 0xF0) {
             /// LDH A, (a8)
             let value = this.bus.readByte(this.PC + 1);
             this.A = this.bus.readByte(0xFF00 + value);
-            console.log(`[${this.PC}] LDH A, (${0xFF00 + value})`);
+            console.log(`LDH A, (${0xFF00 + value})`);
             this.PC += 2;
             return 12;
         } else if (currByte === 0xFE) {
@@ -648,33 +650,66 @@ class CPU {
             return 8;
         } else if (currByte === 0xE2) {
             // LD (C), A
-            console.log(`[${this.PC}] LD (C), A`);
+            console.log(`LD (C), A`);
             this.bus.writeByte(0xFF00 + this.C, this.A);
 
             this.PC++;
             return 8;
         } else if (currByte === 0xF2) {
             // LD A, (C)
-            console.log(`[${this.PC}] LD A, (C)`);
+            console.log(`LD A, (C)`);
             this.A = this.bus.readByte(0xFF00 + this.C);
 
             this.PC++;
             return 8;
-        }
+        } else if (currByte === 0xCD) {
+            // CALL a16
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb >> 8) & lsb;
+            console.log(`CALL ${addr}`);
+
+            // push address after this instruction on to the stack
+            const bytes = this.split16BitValueIntoTwoBytes(this.PC + 3);
+            this.stackPush(bytes[0]);
+            this.stackPush(bytes[1]);                        
+
+            this.PC = addr;
+            return 24;
+        } //else if (currByte === 0x01) {
+            // LD BC, d16
+
+           // this.PC += 3;
+           // return 12;
+        //}
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
         return 0;
     }
 
-      // @return number-of-cycles the last instruction took
-    public executeNextStep() {
-      const cycles = this.executeInstruction();
-      return cycles;
+    // TODO: Method serves no purpose and is an artifact. Please remove.
+    // @return number-of-cycles the last instruction took
+    public executeNextStep(): number {
+      return this.executeInstruction();
+    }
+
+    // Useful for when pushing 16-bit values on to a stack
+    // @return twoBytes number[] -> splits single 16 bit value into an array of two bytes.
+    private split16BitValueIntoTwoBytes(a16: number): number[] {
+        const firstByte = this.PC & 0x00FF;
+        const secondByte = (this.PC & 0xFF00) >> 8;
+        return [firstByte, secondByte];
     }
 
     private stackPush(value: number) {
-        this.bus.writeByte(this.SP, value);
         this.SP--;
+        this.bus.writeByte(this.SP, value);
+    }
+
+    private stackPop(): number {
+        const value = this.bus.readByte(this.SP);
+        this.SP++;
+        return value;
     }
 
     private updateZeroFlag(value: number) {
@@ -708,11 +743,14 @@ export class Gameboy {
   // counter of cycles that has passed since CPU was powered on
   public cyclesCounter: number;
 
-  constructor() {
+  private inDebugMode: boolean;
+
+  constructor(inDebugMode) {
     this.memory = new Memory();
     this.ppu = new PPU();
     this.bus = new MemoryBus(this.memory, this.ppu);
     this.cpu = new CPU(this.bus);
+    this.inDebugMode = inDebugMode;
   }
 
   public powerOn() {
@@ -724,6 +762,10 @@ export class Gameboy {
       if (this.cartridge.getRomHeaderInfo().cartridgeType !== 0x00) {
           console.log(`Error: MBC banking is not yet supported and the rom does require MBC banking`);
           return;
+      }
+
+      if (this.inDebugMode) {
+          console.log("The gameboy has powered on in debug mode");
       }
 
       // initialize the CPU
@@ -739,9 +781,10 @@ export class Gameboy {
       this.ppu.step(cycles);
   }
 
-  public executeRom() {
+  public async executeRom() {
     let keepRunning = true;
     this.cyclesCounter = 0;
+    let cyclesSinceLastSleep = 0;
 
     while (keepRunning) {
       // ExecuteNextInstruction will modify the PC register appropriately
@@ -753,6 +796,12 @@ export class Gameboy {
 
       this.cyclesCounter += cycles;
       this.ppu.step(this.cyclesCounter);
+
+      cyclesSinceLastSleep += cycles;
+      if (this.inDebugMode && cyclesSinceLastSleep > 20) {
+          await sleep(1);
+          cyclesSinceLastSleep = 0;
+      }
     }
 
     console.log('CPU stopped executing. Most likely due to executing instruction error');
@@ -763,7 +812,6 @@ export class Gameboy {
   // addresses 0000-3FFF is ROM Bank 00 (read-only)
   // which contains the Interrupt Table, and Header Information
   public async loadCartridge(cart: Cartridge) {
-      console.log('inside loadCartridge');
       this.cartridge = cart;
       await this.cartridge.load();
 
