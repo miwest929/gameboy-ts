@@ -676,12 +676,18 @@ class CPU {
 
             this.PC = addr;
             return 24;
-        } //else if (currByte === 0x01) {
+        } else if (currByte === 0x01) {
             // LD BC, d16
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const value = (msb >> 8) & lsb;
+            console.log(`LD BC, ${value}`);
+            this.B = msb;
+            this.C = lsb;
 
-           // this.PC += 3;
-           // return 12;
-        //}
+            this.PC += 3;
+            return 12;
+        }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);
         return 0;
