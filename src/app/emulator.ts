@@ -1,6 +1,7 @@
 import { loadRomFromFileSystem, loadRom } from './rom_loader';
 import { uInt8ArrayToUtf8, sleep } from './utils';
 import { PPU, Address } from './ppu';
+import { DebugConsole } from './debugger_console';
 
 /*
 References:
@@ -108,10 +109,10 @@ class MemoryBus {
     }
 }
 
-const ZERO_FLAG: number = 0x7F; // set when the instruction results in a value of 0. Otherwise (result different to 0) it is cleared.
-const SUBTRACTION_FLAG: number = 0xBF; // set when the instruction is a subtraction.  Otherwise (the instruction is an addition) it is cleared.
-const HALF_CARRY_FLAG: number = 0xDF; // set when a carry from bit 3 is produced in arithmetical instructions.  Otherwise it is cleared.
-const CARRY_FLAG: number = 0xEF; // set when a carry from bit 7 is produced in arithmetical instructions.  Otherwise it is cleared.
+export const ZERO_FLAG: number = 0x7F; // set when the instruction results in a value of 0. Otherwise (result different to 0) it is cleared.
+export const SUBTRACTION_FLAG: number = 0xBF; // set when the instruction is a subtraction.  Otherwise (the instruction is an addition) it is cleared.
+export const HALF_CARRY_FLAG: number = 0xDF; // set when a carry from bit 3 is produced in arithmetical instructions.  Otherwise it is cleared.
+export const CARRY_FLAG: number = 0xEF; // set when a carry from bit 7 is produced in arithmetical instructions.  Otherwise it is cleared.
 
 const wrappingByteAdd = (value1: number, value2: number): [number, boolean] => {
     const value = (value1 + value2);
@@ -749,14 +750,22 @@ export class Gameboy {
   // counter of cycles that has passed since CPU was powered on
   public cyclesCounter: number;
 
+  // debugger information
   private inDebugMode: boolean;
+  private debugger: DebugConsole;
 
   constructor(inDebugMode) {
     this.memory = new Memory();
     this.ppu = new PPU();
     this.bus = new MemoryBus(this.memory, this.ppu);
     this.cpu = new CPU(this.bus);
+
     this.inDebugMode = inDebugMode;
+    this.debugger = new DebugConsole(this);
+  }
+
+  public addBreakpoint(addr: number) {
+      this.debugger.addBreakpoint(addr);
   }
 
   public powerOn() {
@@ -782,10 +791,10 @@ export class Gameboy {
     return this.ppu.getScreenBufferData();
   }
 
-  public executeNextStep() {
+  /*public executeNextStep() {
       const cycles = this.cpu.executeNextStep();
       this.ppu.step(cycles);
-  }
+  }*/
 
   public async executeRom() {
     let keepRunning = true;
@@ -800,12 +809,18 @@ export class Gameboy {
           continue;
       }
 
+      if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered(this.cpu.PC)) {
+         // suspend execution until a key is pressed
+         //console.log("Breakpoint hit. Showing debugger console");
+         this.debugger.showConsole();
+      }
+
       this.cyclesCounter += cycles;
       this.ppu.step(this.cyclesCounter);
 
       cyclesSinceLastSleep += cycles;
       if (this.inDebugMode && cyclesSinceLastSleep > 20) {
-          await sleep(1);
+          // await sleep(1);
           cyclesSinceLastSleep = 0;
       }
     }
@@ -824,6 +839,11 @@ export class Gameboy {
       // load bank 0 into Gameboy's ram (0x0000 - 0x3FFF)(16K bytes)
       this.loadRomDataIntoMemory(0x0000, 0x0000, ROM_BANK_END_ADDR);
   }
+
+  /*
+    pauses execution.
+    displays a REPL that lets one inspect the inner state of CPU/PPU/etc
+  */
 
   private loadRomDataIntoMemory(startRamAddr: number, startRomAddr: number, bankSizeBytes: number) {
       const endRamAddr = startRamAddr + bankSizeBytes;

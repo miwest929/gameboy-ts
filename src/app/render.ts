@@ -1,7 +1,7 @@
 let canvas:HTMLCanvasElement = document.getElementById('canvas') as HTMLCanvasElement;
 let ctx:CanvasRenderingContext2D = canvas.getContext('2d');
 
-function renderGameboyScreenBuffer(buffer: IScreenBuffer, startX: number, startY: number) {
+/*function renderGameboyScreenBuffer(buffer: IScreenBuffer, startX: number, startY: number) {
     const canvasBuffer: ICanvasElementBuffer = getPixelBufferForCanvasElement(buffer);
     for (let iy = 0; iy < buffer.heightInPx; iy++) {
         for (let ix = 0; ix < buffer.widthInPx; ix++) {
@@ -16,12 +16,12 @@ function render(ctx: CanvasRenderingContext2D, screenBuffer: IScreenBuffer) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     renderGameboyScreenBuffer(screenBuffer, 180, 62);
-}
+}*/
 
-const gameboy = new Gameboy();
-const cart = new Cartridge('tetris');
+//const gameboy = new Gameboy();
+//const cart = new Cartridge('tetris');
 
-const getOAMHtml = () => {
+/*const getOAMHtml = () => {
     let html = '';
     for (let objId = 39; objId >= 0; objId--) {
         const offset = 4 * objId;
@@ -88,29 +88,30 @@ const renderCPUInfo = () => {
        $('#f').text(gameboy.cpu.F);
     }
 }
-
+*/
 function renderEmulatorInfo() {
-    renderCPUInfo();
-    renderPPUInfo();
+//    renderCPUInfo();
+//    renderPPUInfo();
+   
 }
-
+/*
 function emulatorNextStep() {
     // TODO: Lame attempt at breakpoints
     // while (gameboy.cpu.PC <= 666) {
         gameboy.executeNextStep();
     // }
-}
+}*/
 
 const main = async () => {
-    await gameboy.loadCartridge(cart);
-    console.log(cart.getRomHeaderInfo());
-    console.log('Powered on. Executing rom program');
-    gameboy.powerOn();
+    //await gameboy.loadCartridge(cart);
+    //console.log(cart.getRomHeaderInfo());
+    //console.log('Powered on. Executing rom program');
+    //gameboy.powerOn();
 
     setInterval(renderEmulatorInfo, 40);
 
-    const INSTRUCTIONS_PER_SECOND = 160;
-    setInterval(emulatorNextStep, 3); //1000 / INSTRUCTIONS_PER_SECOND);
+    //const INSTRUCTIONS_PER_SECOND = 160;
+    //setInterval(emulatorNextStep, 3); //1000 / INSTRUCTIONS_PER_SECOND);
 }
 
 main();

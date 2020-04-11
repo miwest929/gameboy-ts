@@ -6,7 +6,7 @@
 //import { multiDimRepeat } from './utils';
 //import { IScreenBuffer } from './ppu';
 
-const SCALING_FACTOR_IN_PX = 4; // 1 gameboy pixel is rendered as a 4x4 square in the browser
+/*const SCALING_FACTOR_IN_PX = 4; // 1 gameboy pixel is rendered as a 4x4 square in the browser
 interface ICanvasElementBuffer {
     scalingFactorInPx: number;
     originalScreenBuffer: IScreenBuffer;
@@ -41,4 +41,4 @@ const gameboyColorToRGBColor = (gbPixel: number) => {
 
 const emptyCanvasBuffer = (emptyColor: string, widthInPx: number, heightInPx: number): string[][] => {
   return multiDimRepeat<string>(emptyColor, heightInPx, widthInPx);
-};
+};*/
