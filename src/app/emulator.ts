@@ -809,9 +809,9 @@ export class Gameboy {
           continue;
       }
 
-      if (this.debugger.breakpointTriggered(this.cpu.PC)) {
+      if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered(this.cpu.PC)) {
          // suspend execution until a key is pressed
-         console.log("Breakpoint hit. Showing debugger console");
+         //console.log("Breakpoint hit. Showing debugger console");
          this.debugger.showConsole();
       }
 
