@@ -1,0 +1,7 @@
+1. Get frontend to run again:w
+2. Clean up unused functionality. eg: WebWorker
+3. Implement WebSocket server. So frontend gets updates on changes to Gameboy
+4. Finish implementing PPU rendering process
+5. Implement interrupts
+.......
+?. Get breakpoints working when running emulator via CLI
