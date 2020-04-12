@@ -37,6 +37,92 @@ const RAM_SIZE_IN_BYTES = 65536;
 const ROM_BANK_END_ADDR = 32767;
 // The boot rom is readable while booting but afterwards the address space of the ROM is remapped for interrupt vectors and other uses.
 
+const IE_ADDR = 0xFFFF;
+class InterruptEnabledRegister {
+    public RawValue: number;
+
+    constructor() {
+        this.RawValue = 0x00;
+    }
+
+    public Enable(interruptBit: Interrupt) {
+        this.RawValue |= interruptBit;
+    }
+
+    public VBlankEnabled(): boolean {
+        return (this.RawValue & 0x01) === 0x01;
+    }
+  
+    public LCDStatEnabled(): boolean {
+          return (this.RawValue & 0x02) === 0x02;
+    }
+  
+    public TimerEnabled(): boolean {
+          return (this.RawValue & 0x04) === 0x04;
+    }
+  
+    public SerialEnabled(): boolean {
+          return (this.RawValue & 0x08) === 0x08;
+    }
+  
+    public JoypadEnabled(): boolean {
+          return (this.RawValue & 0x10) === 0x10;
+    }
+}
+
+export enum Interrupt {
+  VBLANK = 0x01,
+  LCDCSTAT = 0x02,
+  TIMER = 0x04,
+  SERIAL = 0x08,
+  JOYPAD = 0x10
+};
+
+enum InterruptAddress {
+    VBLANK = 0x0040,
+    LCDCSTAT = 0x0048,
+    TIMER = 0x0050,
+    SERIAL = 0x0058,
+    JOYPAD = 0x0060
+}
+
+const IF_ADDR = 0xFF0F;
+class InterruptRequestRegister {
+    public RawValue: number;
+
+    constructor() {
+        this.RawValue = 0x00;
+    }
+
+    public ClearRequest(interruptBit: Interrupt) {
+      this.RawValue &= bitNegation(interruptBit);
+    }
+
+    public Request(interruptBit: Interrupt) {
+        this.RawValue |= interruptBit;
+    }
+
+    public VBlankRequested(): boolean {
+      return (this.RawValue & 0x01) === 0x01;
+    }
+
+    public LCDStatRequested(): boolean {
+        return (this.RawValue & 0x02) === 0x02;
+    }
+
+    public TimerRequested(): boolean {
+        return (this.RawValue & 0x04) === 0x04;
+    }
+
+    public SerialRequested(): boolean {
+        return (this.RawValue & 0x08) === 0x08;
+    }
+
+    public JoypadRequested(): boolean {
+        return (this.RawValue & 0x10) === 0x10;
+    }
+}
+
 class Memory {
   public ram: Uint8Array;
 
@@ -53,13 +139,15 @@ class Memory {
   }
 }
 
-class MemoryBus {
+export class MemoryBus {
     private memory: Memory;
     private ppu: PPU;
+    private cpu: CPU;
 
-    constructor(memory: Memory, ppu: PPU) {
+    constructor(memory: Memory, ppu: PPU, cpu: CPU) {
         this.memory = memory;
         this.ppu = ppu;
+        this.cpu = cpu;
     }
 
     public writeByte(addr: number, value: number) {
@@ -73,6 +161,13 @@ class MemoryBus {
             this.ppu.writeToVRAM(addr - Address.VRAM_ADDR_BEGIN, value);
         } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - Address.OAM_ADDR_BEGIN, value);
+        } else if (addr === IF_ADDR) {
+            // interrupt request register
+            console.log("*&*&*&*&*&* INTERRUPT REQUESTED *&*&*&*&*&*&");
+            this.cpu.IF.RawValue = value;
+        } else if (addr === IE_ADDR) {
+            console.log("*&*&*&*&*&* INTERRUPT ENABLED *&*&*&*&*&*&");
+            this.cpu.IE.RawValue = value;
         } else if (addr === 0xff46) { // DMA Transfer and Start Address
             // Initiate DMA Transfer.
             // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
@@ -94,9 +189,19 @@ class MemoryBus {
             return this.ppu.readFromOAM(addr - Address.OAM_ADDR_BEGIN);
         } else if (addr >= 0xff40 && addr <= 0xff4a) {
             return this.ppu.readFromSpecialRegister(addr);
+        } else if (addr === IF_ADDR) {
+            // interrupt request register
+            return this.cpu.IF.RawValue;
+        } else if (addr === IE_ADDR) {
+            // interrupt request register
+            return this.cpu.IE.RawValue;
         } else {
             return this.memory.read(addr);
         }
+    }
+
+    public RequestInterrupt(interrupt: Interrupt) {
+        this.cpu.RequestInterrupt(interrupt);
     }
 
     private performDMAOAMTransfer(baseSrcAddr: number) {
@@ -166,7 +271,7 @@ const makeSigned = (value: number, bytesCount: number): number => {
 }
 
 
-class CPU {
+export class CPU {
 	// registers (unless specified all registers are assumed to be 1 byte)
 	A: number;
 	B: number;
@@ -181,20 +286,28 @@ class CPU {
     PC: number; // 2 bytes
 
     IME: number; //=0
-    IF: number; //=0xe0
-    IE: number; //=0x00
+    IF: InterruptRequestRegister; // address 0xff0f
+    IE: InterruptEnabledRegister; // address 0xffff
 
 	// Reference to RAM
     bus: MemoryBus;
     
-    constructor(bus: MemoryBus) {
-        this.bus = bus;
+    constructor() {
         this.A = 0;
         this.B = 0;
         this.C = 0;
         this.D = 0;
         this.E = 0;
         this.F = 0;
+    }
+
+    public setMemoryBus(bus: MemoryBus) {
+        this.bus = bus;
+    }
+
+    public RequestInterrupt(interruptBit: number) {
+        this.IF.Request(interruptBit);
+        this.IE.Enable(interruptBit);
     }
 
     public initAfterRomLoaded() {
@@ -204,8 +317,8 @@ class CPU {
 
         // initialize Interrupt related flag registers
         this.IME = 0x00;
-        this.IF = 0xE0;
-        this.IE = 0x00;
+        this.IF = new InterruptRequestRegister();
+        this.IE = new InterruptEnabledRegister();
     }
 
     public H(): number {
@@ -242,6 +355,55 @@ class CPU {
     public setFlag(flag: number) {
         this.F = this.F | ~flag;
     }
+
+    // @return boolean -> true if interrupt was invoked, false otherwise;
+    public processInterrupts(): boolean {
+        if (this.IME === 0x00) {
+            return false;
+        }
+
+        /*
+          VBlank Interrupt has highest priority
+          Joypad interrupts has lowest
+        */
+        let wasInterruptInvoked = false;
+        if (this.IE.VBlankEnabled() && this.IF.VBlankRequested()) {
+           // jump to vblank int address
+           this.IF.ClearRequest(Interrupt.VBLANK);
+           this.PC = InterruptAddress.VBLANK;
+           wasInterruptInvoked = true;
+        } else if (this.IE.LCDStatEnabled() && this.IF.LCDStatRequested()) {
+            this.IF.ClearRequest(Interrupt.LCDCSTAT);
+            this.PC = InterruptAddress.LCDCSTAT;
+            wasInterruptInvoked = true;
+        } else if (this.IE.TimerEnabled() && this.IF.TimerRequested()) {
+            this.IF.ClearRequest(Interrupt.TIMER);
+            this.PC = InterruptAddress.TIMER;
+            wasInterruptInvoked = true;
+        } else if (this.IE.SerialEnabled() && this.IF.SerialRequested()) {
+            this.IF.ClearRequest(Interrupt.SERIAL);
+            this.PC = InterruptAddress.SERIAL;
+            wasInterruptInvoked = true;
+        } else if (this.IE.JoypadEnabled() && this.IF.JoypadRequested()) {
+            this.IF.ClearRequest(Interrupt.JOYPAD);
+            this.PC = InterruptAddress.JOYPAD;
+            wasInterruptInvoked = true;
+        }
+
+        if (wasInterruptInvoked) {
+            // disable future interrupts until they're enabled again
+            this.IME = 0x00;
+
+            /*
+                1. Two wait states are executed (2 machine cycles pass while nothing occurs, presumably the CPU is executing NOPs during this time).
+                2. The current PC is pushed onto the stack, this process consumes 2 more machine cycles.
+                3. The high byte of the PC is set to 0, the low byte is set to the address of the handler ($40,$48,$50,$58,$60). This consumes one last machine cycle.
+            */
+        }
+
+        return wasInterruptInvoked;
+      }
+    
 
     // Due to JMP, RET instructions this fn must modify the PC register itself.
     // The return value is the number of cycles the instruction took
@@ -694,12 +856,6 @@ class CPU {
         return 0;
     }
 
-    // TODO: Method serves no purpose and is an artifact. Please remove.
-    // @return number-of-cycles the last instruction took
-    public executeNextStep(): number {
-      return this.executeInstruction();
-    }
-
     // Useful for when pushing 16-bit values on to a stack
     // @return twoBytes number[] -> splits single 16 bit value into an array of two bytes.
     private split16BitValueIntoTwoBytes(a16: number): number[] {
@@ -757,15 +913,13 @@ export class Gameboy {
   constructor(inDebugMode) {
     this.memory = new Memory();
     this.ppu = new PPU();
-    this.bus = new MemoryBus(this.memory, this.ppu);
-    this.cpu = new CPU(this.bus);
+    this.cpu = new CPU();
+    this.bus = new MemoryBus(this.memory, this.ppu, this.cpu);
+    this.cpu.setMemoryBus(this.bus);
+    this.ppu.setMemoryBus(this.bus);
 
     this.inDebugMode = inDebugMode;
     this.debugger = new DebugConsole(this);
-  }
-
-  public addBreakpoint(addr: number) {
-      this.debugger.addBreakpoint(addr);
   }
 
   public powerOn() {
@@ -791,10 +945,9 @@ export class Gameboy {
     return this.ppu.getScreenBufferData();
   }
 
-  /*public executeNextStep() {
-      const cycles = this.cpu.executeNextStep();
-      this.ppu.step(cycles);
-  }*/
+  public processInterrupts(): boolean {
+      return this.cpu.processInterrupts();
+  }
 
   public async executeRom() {
     let keepRunning = true;
@@ -802,17 +955,23 @@ export class Gameboy {
     let cyclesSinceLastSleep = 0;
 
     while (keepRunning) {
-      // ExecuteNextInstruction will modify the PC register appropriately
-      const cycles = this.cpu.executeNextStep();
-      if (cycles === 0) {
-          keepRunning = false;
+      // process interrupts
+      if (this.processInterrupts()) {
+          // interrupt was invoked. So do nothing else and start executing the interrupt on next step
           continue;
       }
 
-      if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered(this.cpu.PC)) {
-         // suspend execution until a key is pressed
-         //console.log("Breakpoint hit. Showing debugger console");
-         this.debugger.showConsole();
+      if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered()) {
+        // suspend execution until a key is pressed
+        //console.log("Breakpoint hit. Showing debugger console");
+        this.debugger.showConsole();
+      }
+
+      // ExecuteNextInstruction will modify the PC register appropriately
+      const cycles = this.cpu.executeInstruction();
+      if (cycles === 0) {
+          keepRunning = false;
+          continue;
       }
 
       this.cyclesCounter += cycles;

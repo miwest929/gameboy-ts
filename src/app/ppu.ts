@@ -1,4 +1,5 @@
 import { multiDimRepeat } from './utils';
+import { MemoryBus, Interrupt } from './emulator';
 
 /*class Screen {
     private buffer: number[][];
@@ -109,7 +110,7 @@ class OAMEntry {
 // Graphics Special Registers
 
 const INITIAL_LCDC_VALUE = 0x00;
-class LCDC {
+export class LCDC {
     public RawValue: number;
 
     constructor() {
@@ -328,6 +329,7 @@ export class PPU {
     //public isDisplayOn: boolean; // derived from value of LCDC special register
 
     private clock: number;
+    private bus: MemoryBus;
 
     constructor() {
         this.buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
@@ -338,6 +340,10 @@ export class PPU {
         this.LX = 0x00;
         this.LCDC_REGISTER = new LCDC();
         this.LCDC_STATUS = new LCDCStatus();
+    }
+
+    public setMemoryBus(bus: MemoryBus) {
+        this.bus = bus;
     }
 
     public getScreenBufferData(): IScreenBuffer {
@@ -436,7 +442,8 @@ export class PPU {
           this.LY += 1;
 
           if (this.LY === 144) {
-            // request_interrupt(INTERRUPT_VBLANK);
+            // request VBLANK interrupt to occu
+            this.bus.RequestInterrupt(Interrupt.VBLANK);
           } else if (this.LY > 153) {
               this.LY = 0;
           }
