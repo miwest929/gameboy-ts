@@ -1,4 +1,5 @@
 import * as textEncoding from 'text-encoding'; // npm install --save @types/text-encoding
+import * as fs from 'fs';
 
 export function arrayRepeat<T>(value: T, times: number): T[] {
 	let arr = [];
@@ -26,4 +27,8 @@ export function sleep(ms) {
     return new Promise((resolve) => {
       setTimeout(resolve, ms);
     });
-} 
+}
+
+export function loadTextFile(filepath: string) {
+    return fs.readFileSync(filepath, 'utf8');
+}

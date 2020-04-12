@@ -94,13 +94,6 @@ function renderEmulatorInfo() {
 //    renderPPUInfo();
    
 }
-/*
-function emulatorNextStep() {
-    // TODO: Lame attempt at breakpoints
-    // while (gameboy.cpu.PC <= 666) {
-        gameboy.executeNextStep();
-    // }
-}*/
 
 const main = async () => {
     //await gameboy.loadCartridge(cart);

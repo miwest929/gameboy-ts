@@ -1,25 +1,93 @@
 import { Gameboy, ZERO_FLAG, SUBTRACTION_FLAG, HALF_CARRY_FLAG, CARRY_FLAG } from "./emulator";
-// import { LCDC, PPU } from "./ppu";
+import { loadTextFile } from "./utils";
 import * as readlineSync from "readline-sync";
+
+export function loadBreakpoints(filename: string): Breakpoint[] {
+    const breakpointsContents = loadTextFile(filename);
+    const breakpoints: Breakpoint[] = [];
+    
+    for (const line of breakpointsContents.split("\n")) {
+        breakpoints.push( Breakpoint.from(line) );
+    }
+
+    return breakpoints;
+}
+
+abstract class Breakpoint {
+    static from(command: string): Breakpoint {
+      const words = command.toLowerCase().split(' ');
+      console.log(`words = ${words.join('|')}`);
+      const cmd = words[0];
+      const args = words.slice(1);
+
+      if (cmd === "address") {
+        const addr = parseInt(args[0], 16);
+        return new AddressBreakpoint(addr);
+      } else if (cmd === "address-value-change") {
+        const addr = parseInt(args[0], 16);
+        return new AddressValueChangeBreakpoint(addr);
+      } else if (cmd === "address-range-value-change") {
+        const startAddr = parseInt(args[0], 16);
+        const endAddr = parseInt(args[0], 16);
+        return new AddressRangeValueChangeBreakpoint(startAddr, endAddr);
+      }
+    }
+
+    abstract hasTriggered(gb: Gameboy): boolean;
+}
+
+export class AddressBreakpoint {
+   public address: number;
+
+   constructor(address: number) {
+       this.address = address;
+   }
+
+   public hasTriggered(gb: Gameboy): boolean {
+       return gb.cpu.PC === this.address;
+   }
+}
+
+export class AddressValueChangeBreakpoint {
+    public address: number;
+
+    constructor(address: number) {
+        this.address = address;
+    }
+ 
+    public hasTriggered(gb: Gameboy): boolean {
+        return false;
+    }
+}
+
+export class AddressRangeValueChangeBreakpoint {
+    public startAddr: number;
+    public endAddr: number;
+    
+    constructor(startAddr: number, endAddr: number) {
+        this.startAddr = startAddr;
+        this.endAddr = endAddr;
+    }
+
+    public hasTriggered(gb: Gameboy): boolean {
+        return false;
+    }
+}
 
 export class DebugConsole {
     private gameboy: Gameboy;
-    private breakpoints: number[];
+    private breakpoints: Breakpoint[];
 
     // When true the debugger repl will display after each instruction execution
     private inDebuggerMode = false;
 
     constructor(gb: Gameboy) {
         this.gameboy = gb;
-        this.breakpoints = [];
+        this.breakpoints = loadBreakpoints("./breakpoints");
     }
 
-    public addBreakpoint(addr: number) {
-        this.breakpoints.push(addr);
-    }
-
-    public breakpointTriggered(currAddr: number) {
-        return currAddr in this.breakpoints;
+    public breakpointTriggered() {
+        this.breakpoints.some(b => b.hasTriggered(this.gameboy));
     }
 
     public displayPPUData() {

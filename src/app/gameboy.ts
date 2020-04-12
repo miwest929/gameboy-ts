@@ -21,7 +21,7 @@ async function execute() {
   }
 
   const gameboy = new Gameboy(debugMode);
-  gameboy.addBreakpoint(0x0003);
+  //gameboy.addBreakpoint(0x0003);
 
   const cart = new Cartridge(romFilename, true); // second arg is for fromLocalFileSystem
   await gameboy.loadCartridge(cart);
