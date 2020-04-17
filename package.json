@@ -4,6 +4,12 @@
   "description": "Play around with the MessagePack library for Typescript",
   "author": "Michael West",
   "license": "MIT",
+  "scripts": {
+    "start": "tsc --p . --watch",
+    "run:debug": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb debug",
+    "run": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb",
+    "run:server": "http-server src/js --cors -p 8082"
+  },
   "dependencies": {
     "@types/jquery": "^3.3.33",
     "@types/text-encoding": "0.0.35",
