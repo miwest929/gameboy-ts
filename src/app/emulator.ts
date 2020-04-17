@@ -1,5 +1,5 @@
 import { loadRomFromFileSystem, loadRom } from './rom_loader';
-import { uInt8ArrayToUtf8, sleep } from './utils';
+import { uInt8ArrayToUtf8, sleep, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
 import { DebugConsole } from './debugger_console';
 
@@ -410,7 +410,7 @@ export class CPU {
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     // @return cyclesConsumed: number = The number of cycles the just executed instruction took
     public executeInstruction(): number {
-        process.stdout.write(`[${this.PC}]: `); // print out the address (no newline)
+        process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
 
         const currByte = this.bus.readByte(this.PC);
     	if (currByte === 0x31) {
@@ -850,6 +850,37 @@ export class CPU {
 
             this.PC += 3;
             return 12;
+        } else if (currByte === 0xD9) {
+            // RETI
+            console.log('RETI');
+
+            // pop two bytes from the stack and jump to that address
+            // then globally enable interrupts
+            // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
+            const msb = this.stackPop();
+            const lsb = this.stackPop();
+            const addr = (msb >> 8) & lsb;
+
+            this.IME = 0x01; // globally enable interrupts
+            this.PC = addr;
+            return 16;
+        } else if (currByte === 0xC9) {
+            // RET
+            // Pop two bytes from stack & jump to that address.
+            // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
+            const msb = this.stackPop();
+            const lsb = this.stackPop();
+            const addr = (msb >> 8) & lsb;
+            this.PC = addr;
+
+            return 16;
+        } else if (currByte === 0xFB) {
+            // EI
+            console.log('EI');
+            this.IME = 0x01;
+            this.PC++;
+
+            return 4;
         }
 
         console.log(`Error: encountered an unsupported opcode of ${currByte} at address ${this.PC}`);

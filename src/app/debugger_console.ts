@@ -7,7 +7,10 @@ export function loadBreakpoints(filename: string): Breakpoint[] {
     const breakpoints: Breakpoint[] = [];
     
     for (const line of breakpointsContents.split("\n")) {
-        breakpoints.push( Breakpoint.from(line) );
+        const bp = Breakpoint.from(line);
+        if (bp) {
+          breakpoints.push(bp);
+        }
     }
 
     return breakpoints;
@@ -45,6 +48,10 @@ export class AddressBreakpoint {
 
    public hasTriggered(gb: Gameboy): boolean {
        return gb.cpu.PC === this.address;
+   }
+
+   public toString() {
+       return `<AddressBreakpoint addr=${this.address}>`;
    }
 }
 
@@ -87,7 +94,12 @@ export class DebugConsole {
     }
 
     public breakpointTriggered() {
-        this.breakpoints.some(b => b.hasTriggered(this.gameboy));
+        for (let i = 0; i < this.breakpoints.length; i++) {
+            if (this.breakpoints[i] && this.breakpoints[i].hasTriggered(this.gameboy)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public displayPPUData() {

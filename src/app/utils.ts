@@ -32,3 +32,7 @@ export function sleep(ms) {
 export function loadTextFile(filepath: string) {
     return fs.readFileSync(filepath, 'utf8');
 }
+
+export function displayAsHex(n: number) {
+    return n.toString(16);
+}
