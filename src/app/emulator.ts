@@ -405,8 +405,18 @@ export class CPU {
 
         return wasInterruptInvoked;
       }
+
+    /*private readTwoByteAddr(lsbAddr) {
+        const lsb = this.bus.readByte(lsbAddr);
+        const msb = this.bus.readByte(lsbAddr + 1);
+        return (msb >> 8) & lsb;        
+    }*/
     
-    // READ-ONLY. Reads next instruction and disassemblies it as a string
+    // READ-ONLY. Just eads next instruction and disassemblies it as a string
+    // This function does not modify anything
+    // TODO: Now that we separated printing from executing instruction. We have shotgun surgory situation.
+    //       Adding a new instruction requires modifying this method and the 'executeNextInstruction' method.
+    //       Figure out a way around this.
     public disassembleNextInstruction(): string {
         process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
         const currByte = this.bus.readByte(this.PC);
@@ -415,6 +425,7 @@ export class CPU {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
+
             return `LD SP, ${displayAsHex(addr)}`;
         } else if (currByte === 0x00) {
           return "NOP";
@@ -434,7 +445,6 @@ export class CPU {
             const value = this.bus.readByte(this.PC + 1);
             return `LD C, ${value}`;
         } else if (currByte === 0x06) {
-            // LD B,d8
             const value = this.bus.readByte(this.PC + 1);
             return `LD B, ${displayAsHex(value)}`;
         } else if (currByte === 0x32) {
@@ -560,8 +570,6 @@ export class CPU {
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     // @return cyclesConsumed: number = The number of cycles the just executed instruction took
     public executeInstruction(): number {
-        //process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
-
         const currByte = this.bus.readByte(this.PC);
     	if (currByte === 0x31) {
             // LD SP, N
@@ -645,11 +653,11 @@ export class CPU {
             const offset = makeSigned(value, 1);
             this.PC += 2;
             if (!this.getFlag(ZERO_FLAG)) {
-                // console.log(`JR NZ, ${offset} [jumped]`);
+                // jumped
                 this.PC += offset;
                 return 12;
             } else {
-                // console.log(`JR NZ, ${offset} [not jumped]`);
+                // not jumped
                 return 8;
             }
         } else if (currByte === 0x0D) {
@@ -704,7 +712,6 @@ export class CPU {
             return 4;
         } else if (currByte === 0x15) {
             // DEC D
-            console.log("DEC D");
             const result = wrappingByteSub(this.D, 1);
             this.updateHalfCarryFlag(this.D, 1);
             this.D = result[0];
@@ -717,13 +724,11 @@ export class CPU {
         } else if (currByte === 0xB0) {
             // Logical OR register B with register A, result in A.
             // OR B
-            console.log("OR B");
             this.A = this.A | this.B
             this.PC++;
             return 4;
         } else if (currByte === 0x14) {
             // INC D
-            console.log("INC D");
             let result = wrappingByteAdd(this.D, 1);
             // check for half-carry
             this.updateHalfCarryFlag(this.D, 1);
@@ -736,14 +741,12 @@ export class CPU {
             return 4;
         } else if (currByte === 0x7B) {
             // LD A,E
-            console.log("LD A, E");
             this.A = this.E;
             this.PC++;
             return 4;
         } else if (currByte === 0xBF) {
             // compare A with A. Set flags as if they are equal
             // CP A
-            console.log("CP A");
             this.setFlag(ZERO_FLAG);
             this.setFlag(SUBTRACTION_FLAG);
             this.clearFlag(HALF_CARRY_FLAG);
@@ -753,7 +756,6 @@ export class CPU {
             return 4;
         } else if (currByte === 0x29) {
             // ADD HL,HL
-            console.log("ADD HL, HL");
             const result = wrappingTwoByteAdd(this.HL, this.HL);
             this.updateHalfCarryFlag(this.HL, this.HL);
             this.HL = result[0];
@@ -764,7 +766,6 @@ export class CPU {
             return 8;
         } else if (currByte === 0x19) {
             // ADD HL,DE
-            console.log("ADD HL, DE");
             const result = wrappingTwoByteAdd(this.HL, this.DE());
             this.updateHalfCarryFlag(this.HL, this.DE());
             this.HL = result[0];
@@ -1094,19 +1095,23 @@ export class Gameboy {
   }
 
   public async executeRom() {
-    let keepRunning = true;
     this.cyclesCounter = 0;
-    let cyclesSinceLastSleep = 0;
 
+    let keepRunning = true;
     while (keepRunning) {
       // process interrupts
       if (this.processInterrupts()) {
           // interrupt was invoked. So do nothing else and start executing the interrupt on next step
           continue;
       }
-
+  
+      const shouldShowDebugger = this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered();
+      if (shouldShowDebugger) {
+          // Asterisk indicates this is the current instruction (hasn't been executed yet)
+          process.stdout.write("* ");
+      }
       console.log(this.cpu.disassembleNextInstruction());
-      if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered()) {
+      if (shouldShowDebugger) {
         // suspend execution until a key is pressed
         this.debugger.showConsole();
       }
@@ -1120,12 +1125,6 @@ export class Gameboy {
 
       this.cyclesCounter += cycles;
       this.ppu.step(this.cyclesCounter);
-
-      cyclesSinceLastSleep += cycles;
-      if (this.inDebugMode && cyclesSinceLastSleep > 20) {
-          // await sleep(1);
-          cyclesSinceLastSleep = 0;
-      }
     }
 
     console.log('CPU stopped executing. Most likely due to executing instruction error');
@@ -1142,11 +1141,6 @@ export class Gameboy {
       // load bank 0 into Gameboy's ram (0x0000 - 0x3FFF)(16K bytes)
       this.loadRomDataIntoMemory(0x0000, 0x0000, ROM_BANK_END_ADDR);
   }
-
-  /*
-    pauses execution.
-    displays a REPL that lets one inspect the inner state of CPU/PPU/etc
-  */
 
   private loadRomDataIntoMemory(startRamAddr: number, startRomAddr: number, bankSizeBytes: number) {
       const endRamAddr = startRamAddr + bankSizeBytes;
