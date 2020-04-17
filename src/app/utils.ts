@@ -34,5 +34,5 @@ export function loadTextFile(filepath: string) {
 }
 
 export function displayAsHex(n: number) {
-    return n.toString(16);
+    return `0x${n.toString(16)}`;
 }

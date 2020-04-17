@@ -298,7 +298,9 @@ export class CPU {
         this.C = 0;
         this.D = 0;
         this.E = 0;
-        this.F = 0;
+
+        // NOTE: According to BGB Debugger. This register is initialized to 0xB0 (eg: zero, hc, and carry flags on)
+        this.F = 0xB0;
     }
 
     public setMemoryBus(bus: MemoryBus) {
@@ -404,13 +406,161 @@ export class CPU {
         return wasInterruptInvoked;
       }
     
+    // READ-ONLY. Reads next instruction and disassemblies it as a string
+    public disassembleNextInstruction(): string {
+        process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
+        const currByte = this.bus.readByte(this.PC);
+        
+    	if (currByte === 0x31) {
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb >> 8) & lsb;
+            return `LD SP, ${displayAsHex(addr)}`;
+        } else if (currByte === 0x00) {
+          return "NOP";
+        } else if (currByte === 0xC3) {
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb << 8) | lsb;
+            return `JP ${displayAsHex(addr)}`;
+        } else if (currByte === 0xAF) {
+            return "XOR A";
+        } else if (currByte === 0x21) {
+            let lsb = this.bus.readByte(this.PC + 1);
+            let msb = this.bus.readByte(this.PC + 2);
+            const value = (msb << 8) | lsb;
+            return `LD HL, ${displayAsHex(value)}`;
+        } else if (currByte === 0x0E) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD C, ${value}`;
+        } else if (currByte === 0x06) {
+            // LD B,d8
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD B, ${displayAsHex(value)}`;
+        } else if (currByte === 0x32) {
+            return "LD (HL-), A";
+        } else if (currByte === 0x05) {
+            return "DEC B";
+        } else if (currByte === 0x20) {
+            const value = this.bus.readByte(this.PC + 1);
+            const offset = makeSigned(value, 1);
+            if (!this.getFlag(ZERO_FLAG)) {
+                return `JR NZ, ${offset} [jumped]`;
+            } else {
+                return `JR NZ, ${offset} [not jumped]`;
+            }
+        } else if (currByte === 0x0D) {
+            return `DEC C`;
+        } else if (currByte === 0x1D) {
+            return `DEC E`;
+        } else if (currByte === 0x16) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD D, ${displayAsHex(value)}`;
+        } else if (currByte === 0x1F) {
+            return "RRA";
+        } else if (currByte === 0x25) {
+            return "DEC H";
+        } else if (currByte === 0x15) {
+            return "DEC D";
+        } else if (currByte === 0xB0) {
+            return "OR B";
+        } else if (currByte === 0x14) {
+            return "INC D";
+        } else if (currByte === 0x7B) {
+            return "LD A, E";
+        } else if (currByte === 0xBF) {
+            return "CP A";
+        } else if (currByte === 0x29) {
+            return "ADD HL, HL";
+        } else if (currByte === 0x19) {
+            return "ADD HL, DE";
+        } else if (currByte === 0x77) {
+            return "LD (HL), A";
+        } else if (currByte === 0x07) {
+            return "RLCA [NOT IMPL]";
+        } else if (currByte === 0x08) {
+            let lsb = this.bus.readByte(this.PC + 1);
+            let msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb << 8) | lsb;
+            return `LD (${displayAsHex(addr)}), SP`;
+        } else if (currByte === 0x12) {
+            return "LD (DE), A";
+        } else if (currByte === 0x0C) {
+            return "INC C";
+        } else if (currByte === 0xD2) {
+            let lsb = this.bus.readByte(this.PC + 1);
+            let msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb << 8) | lsb;
+            return `JP NC, ${displayAsHex(addr)}`;
+        } else if (currByte === 0x10) {
+            console.log("STOP 0 (not implemented. no button press support yet");
+        } else if (currByte === 0x18) {
+            let offset = this.bus.readByte(this.PC + 1);
+            return `JR ${offset}`;
+        } else if (currByte === 0x7F) {
+            return "LD A, A";
+        } else if (currByte === 0x7C) {
+            return "LD A, H";
+        } else if (currByte === 0x78) {
+            return "LD A, B";
+        } else if (currByte === 0x79) {
+            return "LD A, C";
+        } else if (currByte === 0xFF) {
+            return "RST 38H";
+        } else if (currByte === 0x3E) {
+            let value = this.bus.readByte(this.PC + 1);
+            return `LD A, ${displayAsHex(value)}`;
+        } else if (currByte === 0xF3) {
+            return "DI";
+        } else if (currByte === 0xE0) {
+            let value = this.bus.readByte(this.PC + 1);
+            return `LDH (${0xFF00 + value}), A`;
+        } else if (currByte === 0xF0) {
+            let value = this.bus.readByte(this.PC + 1);
+            return `LDH A, (${0xFF00 + value})`;
+        } else if (currByte === 0xFE) {
+            let value = this.bus.readByte(this.PC + 1);
+            return `CP ${value}`;
+        } else if (currByte === 0x36) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD (HL), ${value}`;
+        } else if (currByte === 0xEA) {
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb >> 8) & lsb;
+            return `LDH (${addr}), A`;
+        } else if (currByte === 0x2A) {
+            return "LD A, (HL+)";
+        } else if (currByte === 0xE2) {
+            return `LD (C), A`;
+        } else if (currByte === 0xF2) {
+            return `LD A, (C)`;
+        } else if (currByte === 0xCD) {
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const addr = (msb >> 8) & lsb;
+            return `CALL ${displayAsHex(addr)}`;
+        } else if (currByte === 0x01) {
+            // LD BC, d16
+            const lsb = this.bus.readByte(this.PC + 1);
+            const msb = this.bus.readByte(this.PC + 2);
+            const value = (msb >> 8) & lsb;
+            return `LD BC, ${displayAsHex(value)}`;
+        } else if (currByte === 0xD9) {
+            return 'RETI';
+        } else if (currByte === 0xC9) {
+            return `RET <two-byte-stack-pop>`;
+        } else if (currByte === 0xFB) {
+            return 'EI';
+        }
+    }
 
     // Due to JMP, RET instructions this fn must modify the PC register itself.
     // The return value is the number of cycles the instruction took
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     // @return cyclesConsumed: number = The number of cycles the just executed instruction took
     public executeInstruction(): number {
-        process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
+        //process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
 
         const currByte = this.bus.readByte(this.PC);
     	if (currByte === 0x31) {
@@ -425,7 +575,6 @@ export class CPU {
             return 12;
         } else if (currByte === 0x00) {
           // NOP
-          console.log("NOP");
           this.PC++;
           return 4;
         } else if (currByte === 0xC3) {
@@ -433,7 +582,6 @@ export class CPU {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb << 8) | lsb;
-            console.log(`JP ${addr} [${msb}{${msb<<8}} ${lsb}]`);
             this.PC = addr;
             return 16;
         } else if (currByte === 0xAF) {
@@ -441,7 +589,6 @@ export class CPU {
             this.A = this.A ^ this.A;
             this.updateZeroFlag(this.A);
 
-            console.log("XOR A");
             this.PC++;
             return 4;
         } else if (currByte === 0x21) {
@@ -450,22 +597,20 @@ export class CPU {
             let msb = this.bus.readByte(this.PC + 2);
             const value = (msb << 8) | lsb;
             this.HL = value;
-            console.log(`LD HL, ${value}`);
-
             this.PC += 3;
             return 12;
         } else if (currByte === 0x0E) {
             // LD C,d8
             const value = this.bus.readByte(this.PC + 1);
             this.C = value;
-            console.log(`LD C, ${value}`);
+            
             this.PC += 2;
             return 8;
         } else if (currByte === 0x06) {
             // LD B,d8
             const value = this.bus.readByte(this.PC + 1);
             this.B = value;
-            console.log(`LD B, ${value}`);
+            
             this.PC += 2;
             return 8;
         } else if (currByte === 0x32) {
@@ -474,14 +619,11 @@ export class CPU {
             this.bus.writeByte(this.HL, this.A);
             const result = wrappingTwoByteSub(this.HL, 1);
             this.HL = result[0];
-            console.log("LD (HL-), A");
 
             this.PC++;
             return 8;
         } else if (currByte === 0x05) {
             // DEC B
-            console.log("DEC B");
-
             // TODO: Verify is wrapping is correct behavior for DEC B instruction. Also, how is the Zero flag
             //       suppossed to be updated?
             const result = wrappingByteSub(this.B, 1);
@@ -503,18 +645,15 @@ export class CPU {
             const offset = makeSigned(value, 1);
             this.PC += 2;
             if (!this.getFlag(ZERO_FLAG)) {
-
-                console.log(`JR NZ, ${offset} [jumped]`);
+                // console.log(`JR NZ, ${offset} [jumped]`);
                 this.PC += offset;
                 return 12;
             } else {
-                console.log(`JR NZ, ${offset} [not jumped]`);
+                // console.log(`JR NZ, ${offset} [not jumped]`);
                 return 8;
             }
         } else if (currByte === 0x0D) {
             // DEC C
-            console.log(`DEC C`);
-
             const result = wrappingByteSub(this.C, 1);
             this.updateHalfCarryFlag(this.C, 1);
             this.C = result[0];
@@ -526,8 +665,6 @@ export class CPU {
             return 4;
         } else if (currByte === 0x1D) {
             // DEC E
-            console.log(`DEC E`);
-
             const result = wrappingByteSub(this.E, 1);
             this.updateHalfCarryFlag(this.E, 1);
             this.E = result[0];
@@ -541,14 +678,11 @@ export class CPU {
             // LD D,d8
             const value = this.bus.readByte(this.PC + 1);
             this.D = value;
-            console.log(`LD D, ${value}`);
-
             this.PC += 2;
             return 8;
         } else if (currByte === 0x1F) {
             // Rotate A right through Carry flag.
             // RRA
-            console.log("RRA");
             const newCarryValue = (this.A & 0x01) !== 0;
             const oldCarryValue = this.getFlag(CARRY_FLAG) ? 0x01 : 0x00;
             this.A = (this.A >> 1) | (oldCarryValue << 7);
@@ -565,7 +699,6 @@ export class CPU {
             return 4;
         } else if (currByte === 0x25) {
             // DEC H
-            console.log("DEC H");
             this.decrementH();
             this.PC++;
             return 4;
@@ -685,18 +818,14 @@ export class CPU {
             const addr = (msb << 8) | lsb;
             if (!this.getFlag(CARRY_FLAG)) {
                 this.PC = addr;
-                console.log(`JP NC, ${addr} [jumped]`);
                 return 16;
             } else {
-                console.log(`JP NC, ${addr} [no jump]`);
                 this.PC += 2;
                 return 12;
             }
         } else if (currByte === 0x10) {
             // Halt CPU & LCD display until button pressed.
             // STOP 0
-
-            console.log("STOP 0 (not implemented. no button press support yet");
             this.PC += 2;
             return 4;
         } else if (currByte === 0x18) {
@@ -711,36 +840,30 @@ export class CPU {
             this.PC += 2; // move to next instruction then add offset
             const addr = this.PC + offset;
             this.PC = addr;
-            console.log(`JR ${offset} [jumped to addr ${addr}]`);
             return 8;
         } else if (currByte === 0x7F) {
             // LD A,A
-            console.log("LD A, A");
             this.A = this.A;
             this.PC++;
             return 4;
         } else if (currByte === 0x7C) {
             // LD A,H
-            console.log("LD A, H");
             this.A = this.H();
             this.PC++;
             return 4;
         } else if (currByte === 0x78) {
             // LD A,B
-            console.log("LD A, B");
             this.A = this.B;
             this.PC++;
             return 4;
         } else if (currByte === 0x79) {
             // LD A,C
-            console.log("LD A, C");
             this.A = this.C;
             this.PC++;
             return 4;
         } else if (currByte === 0xFF) {
             // Push present address onto stack. Jump to address $0000 + 56 (0x38).
             // RST 38H
-            console.log("RST 38H");
             this.PC++; // push the next address onto the stack
             this.stackPush(this.PC & 0x00FF);
             this.stackPush((this.PC & 0xFF00) >> 8);
@@ -754,8 +877,12 @@ export class CPU {
             this.PC += 2;
             return 8;
         } else if (currByte === 0xF3) {
-            // disable interrupts
             // DI
+            /*
+                disables interrupts but not
+                immediately. Interrupts are disabled after
+                instruction after DI is executed. 
+            */
             this.IME = 0x00;
             this.PC++;
             return 4;
@@ -763,21 +890,18 @@ export class CPU {
             // LDH (a8),A
             let value = this.bus.readByte(this.PC + 1);
             this.bus.writeByte(0xFF00 + value, this.A);
-            console.log(`LDH (${0xFF00 + value}), A`);
             this.PC += 2;
             return 12;
         } else if (currByte === 0xF0) {
             /// LDH A, (a8)
             let value = this.bus.readByte(this.PC + 1);
             this.A = this.bus.readByte(0xFF00 + value);
-            console.log(`LDH A, (${0xFF00 + value})`);
             this.PC += 2;
             return 12;
         } else if (currByte === 0xFE) {
             // Compare A with n. This is basically an A - n subtraction instruction but the results are thrown away.
             // CP d8
             let value = this.bus.readByte(this.PC + 1);
-            console.log(`CP ${value}`);
             let result = wrappingByteSub(this.A, value);
             this.updateZeroFlag(result[0]);
             this.setFlag(SUBTRACTION_FLAG);
@@ -789,7 +913,6 @@ export class CPU {
         } else if (currByte === 0x36) {
             // LD (HL), d8
             const value = this.bus.readByte(this.PC + 1);
-            console.log(`LD (HL), ${value}`);
             this.bus.writeByte(this.HL, value);
             this.PC += 2;
             return 12;
@@ -798,14 +921,12 @@ export class CPU {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
-            console.log(`LDH (${addr}), A`);
             this.bus.writeByte(addr, this.A);
 
             this.PC += 3;
             return 16;
         } else if (currByte === 0x2A) {
             // LD A, (HL+)     [1 byte, 8 cycles]
-            console.log("LD A, (HL+)");
             this.A = this.bus.readByte(this.HL);
             this.HL++;
 
@@ -813,14 +934,12 @@ export class CPU {
             return 8;
         } else if (currByte === 0xE2) {
             // LD (C), A
-            console.log(`LD (C), A`);
             this.bus.writeByte(0xFF00 + this.C, this.A);
 
             this.PC++;
             return 8;
         } else if (currByte === 0xF2) {
             // LD A, (C)
-            console.log(`LD A, (C)`);
             this.A = this.bus.readByte(0xFF00 + this.C);
 
             this.PC++;
@@ -830,7 +949,6 @@ export class CPU {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
-            console.log(`CALL ${addr}`);
 
             // push address after this instruction on to the stack
             const bytes = this.split16BitValueIntoTwoBytes(this.PC + 3);
@@ -843,8 +961,6 @@ export class CPU {
             // LD BC, d16
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
-            const value = (msb >> 8) & lsb;
-            console.log(`LD BC, ${value}`);
             this.B = msb;
             this.C = lsb;
 
@@ -852,8 +968,6 @@ export class CPU {
             return 12;
         } else if (currByte === 0xD9) {
             // RETI
-            console.log('RETI');
-
             // pop two bytes from the stack and jump to that address
             // then globally enable interrupts
             // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
@@ -876,7 +990,6 @@ export class CPU {
             return 16;
         } else if (currByte === 0xFB) {
             // EI
-            console.log('EI');
             this.IME = 0x01;
             this.PC++;
 
@@ -992,9 +1105,9 @@ export class Gameboy {
           continue;
       }
 
+      console.log(this.cpu.disassembleNextInstruction());
       if (this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered()) {
         // suspend execution until a key is pressed
-        //console.log("Breakpoint hit. Showing debugger console");
         this.debugger.showConsole();
       }
 

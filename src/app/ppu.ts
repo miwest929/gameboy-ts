@@ -338,6 +338,8 @@ export class PPU {
         this.clock = 0x00;
         this.LY = 0x00;
         this.LX = 0x00;
+        this.WINDOWX = 0x00;
+        this.WINDOWY = 0x00;
         this.LCDC_REGISTER = new LCDC();
         this.LCDC_STATUS = new LCDCStatus();
     }

@@ -1,5 +1,5 @@
 import { Gameboy, ZERO_FLAG, SUBTRACTION_FLAG, HALF_CARRY_FLAG, CARRY_FLAG } from "./emulator";
-import { loadTextFile } from "./utils";
+import { loadTextFile, displayAsHex } from "./utils";
 import * as readlineSync from "readline-sync";
 
 export function loadBreakpoints(filename: string): Breakpoint[] {
@@ -105,10 +105,10 @@ export class DebugConsole {
     public displayPPUData() {
         console.log(`
         ---------------------- PPU ---------------------
-        LX = ${this.gameboy.ppu.LX}
-        LY = ${this.gameboy.ppu.LY}
-        WINDOWX = ${this.gameboy.ppu.WINDOWX}
-        WINDOWY = ${this.gameboy.ppu.WINDOWY}
+        LX = ${displayAsHex(this.gameboy.ppu.LX)} (${this.gameboy.ppu.LX})
+        LY = ${displayAsHex(this.gameboy.ppu.LY)} (${this.gameboy.ppu.LY})
+        WINDOWX = ${displayAsHex(this.gameboy.ppu.WINDOWX)} (${this.gameboy.ppu.WINDOWX})
+        WINDOWY = ${displayAsHex(this.gameboy.ppu.WINDOWY)} (${this.gameboy.ppu.WINDOWY})
         isDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isDisplayOn()}
         isWindowDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isWindowDisplayOn()}
         isObjSpriteDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isObjSpriteDisplayOn()}
@@ -120,18 +120,41 @@ export class DebugConsole {
     public displayCPUData() {
         console.log(`
         ---------------------- CPU ---------------------
-        PC = ${this.gameboy.cpu.PC}
-        A = ${this.gameboy.cpu.A}
-        B = ${this.gameboy.cpu.B}
-        C = ${this.gameboy.cpu.C}
-        D = ${this.gameboy.cpu.D}
-        E = ${this.gameboy.cpu.E}
-        SP = ${this.gameboy.cpu.SP}
+        PC = ${displayAsHex(this.gameboy.cpu.PC)}
+        A = ${displayAsHex(this.gameboy.cpu.A)}
+        B = ${displayAsHex(this.gameboy.cpu.B)}
+        C = ${displayAsHex(this.gameboy.cpu.C)}
+        D = ${displayAsHex(this.gameboy.cpu.D)}
+        E = ${displayAsHex(this.gameboy.cpu.E)}
+        HL = ${displayAsHex(this.gameboy.cpu.HL)}
+        SP = ${displayAsHex(this.gameboy.cpu.SP)}
         ZeroFlag = ${this.gameboy.cpu.getFlag(ZERO_FLAG)}
         SubtractionFlag = ${this.gameboy.cpu.getFlag(SUBTRACTION_FLAG)}
         HalfCarry = ${this.gameboy.cpu.getFlag(HALF_CARRY_FLAG)}
         CarryFlag = ${this.gameboy.cpu.getFlag(CARRY_FLAG)}
         ---------------------- CPU ---------------------
+        `);
+    }
+
+    public displayMemoryAddressValue(addr: number) {
+        const value = this.gameboy.bus.readByte(addr);
+        console.log(`
+        ------------------------ RAM ADDRESS ---------------------
+        Address = ${displayAsHex(addr)} (${addr})
+        RAM[${displayAsHex(addr)}] = ${displayAsHex(value)} (${value})
+        ------------------------ RAM ADDRESS ---------------------
+        `);
+    }
+
+    public displayHelp() {
+        console.log(`
+        ---------------------------------------------------------------------
+        p cpu -> Display CPU registers
+        p ppu -> Display PPU info including special registers
+        readmem $addr -> Display byte value at specified address. Addr is a hexadecimal value
+        next (n) -> Execute the next instruction. Keep repl
+        continue (c) -> Exit out of repl and continue executing instructions
+        ---------------------------------------------------------------------
         `);
     }
 
@@ -145,7 +168,7 @@ export class DebugConsole {
         let showDebugger = true;
 
         while (showDebugger) {
-            const command = readlineSync.question(`(h for help, c for continue) [${this.gameboy.cpu.PC}]> `, {hideEchoBack: false});
+            const command = readlineSync.question(`(h for help, c for continue) [${displayAsHex(this.gameboy.cpu.PC)}]> `, {hideEchoBack: false});
 
             if (command === "p cpu") {
                 this.displayCPUData();
@@ -158,6 +181,12 @@ export class DebugConsole {
             } else if (command === "c" || command === "continue") {
                 showDebugger = false;
                 this.inDebuggerMode = false;
+            } else if (command === "h" || command === "help") {
+                this.displayHelp();
+            } else if (command.startsWith('readmem')) {
+                const args = command.split(' ').slice(1);
+                const addr = parseInt(args[0], 16);
+                this.displayMemoryAddressValue(addr);
             }
         }
     } 
