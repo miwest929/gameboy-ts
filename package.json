@@ -4,10 +4,6 @@
   "description": "Play around with the MessagePack library for Typescript",
   "author": "Michael West",
   "license": "MIT",
-  "scripts": {
-    "bp": "npm run ts-node scripts/bp.ts",
-    "test": "jest"
-  },
   "dependencies": {
     "@types/jquery": "^3.3.33",
     "@types/text-encoding": "0.0.35",
