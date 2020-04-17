@@ -270,7 +270,7 @@ const makeSigned = (value: number, bytesCount: number): number => {
   return value;
 }
 
-
+const DISABLE_COUNTER_INACTIVE = -1;
 export class CPU {
 	// registers (unless specified all registers are assumed to be 1 byte)
 	A: number;
@@ -292,6 +292,9 @@ export class CPU {
 	// Reference to RAM
     bus: MemoryBus;
     
+    // instruction counter for disabling instructions
+    disableInterruptsCounter: number;
+
     constructor() {
         this.A = 0;
         this.B = 0;
@@ -301,6 +304,8 @@ export class CPU {
 
         // NOTE: According to BGB Debugger. This register is initialized to 0xB0 (eg: zero, hc, and carry flags on)
         this.F = 0xB0;
+
+        this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // -1 means to ignore this counter
     }
 
     public setMemoryBus(bus: MemoryBus) {
@@ -356,6 +361,28 @@ export class CPU {
 
     public setFlag(flag: number) {
         this.F = this.F | ~flag;
+    }
+
+    public shouldDisableInterrupts() {
+        if (this.disableInterruptsCounter === DISABLE_COUNTER_INACTIVE) {
+            return false;
+        }
+
+        if (this.disableInterruptsCounter === 0) {
+            return true;
+        }
+
+        this.disableInterruptsCounter--;
+        return false;
+    }
+
+    public disableInterrupts() {
+        this.IME = 0x00;
+        this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // prevent interrupts from being disabled again
+    }
+
+    public startDisableInterrupt() {
+        this.disableInterruptsCounter = 1;
     }
 
     // @return boolean -> true if interrupt was invoked, false otherwise;
@@ -570,6 +597,10 @@ export class CPU {
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
     // @return cyclesConsumed: number = The number of cycles the just executed instruction took
     public executeInstruction(): number {
+        if (this.shouldDisableInterrupts()) {
+            this.disableInterrupts();
+        }
+
         const currByte = this.bus.readByte(this.PC);
     	if (currByte === 0x31) {
             // LD SP, N
@@ -878,13 +909,13 @@ export class CPU {
             this.PC += 2;
             return 8;
         } else if (currByte === 0xF3) {
-            // DI
             /*
                 disables interrupts but not
                 immediately. Interrupts are disabled after
                 instruction after DI is executed. 
             */
-            this.IME = 0x00;
+            // DI
+            this.startDisableInterrupt();
             this.PC++;
             return 4;
         } else if (currByte === 0xE0) {
