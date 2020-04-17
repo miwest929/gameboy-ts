@@ -905,7 +905,6 @@ export class CPU {
             // LD A, d8
             let value = this.bus.readByte(this.PC + 1);
             this.A = value;
-            console.log(`LD A, ${value}`);
             this.PC += 2;
             return 8;
         } else if (currByte === 0xF3) {
@@ -1100,13 +1099,11 @@ export class Gameboy {
 
   public powerOn() {
       if (!this.cartridge.isLoaded) {
-          console.error("Error powering on the GameBoy due to the cartridge not being loaded yet.")
-          return;
+          throw new Error('Error powering on the GameBoy due to the cartridge not being loaded yet.');
       }
 
       if (this.cartridge.getRomHeaderInfo().cartridgeType !== 0x00) {
-          console.log(`Error: MBC banking is not yet supported and the rom does require MBC banking`);
-          return;
+          throw new Error('Error: MBC banking is not yet supported and the rom does require MBC banking');
       }
 
       if (this.inDebugMode) {
