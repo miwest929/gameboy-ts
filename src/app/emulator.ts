@@ -270,6 +270,18 @@ const makeSigned = (value: number, bytesCount: number): number => {
   return value;
 }
 
+// This emulator doesn't run the bootstrap rom. But it
+// needs to initialize the registers to their values as 
+// if the bootstrap has run
+const INITIAL_A_REG_VALUE = 0x01;
+const INITIAL_F_REG_VALUE = 0x80;
+const INITIAL_B_REG_VALUE = 0x00;
+const INITIAL_C_REG_VALUE = 0x13;
+const INITIAL_D_REG_VALUE = 0x00;
+const INITIAL_E_REG_VALUE = 0xD8;
+const INITIAL_HL_REG_VALUE = 0x014D;
+
+// used for delaying disabling interrupts
 const DISABLE_COUNTER_INACTIVE = -1;
 export class CPU {
 	// registers (unless specified all registers are assumed to be 1 byte)
@@ -296,14 +308,15 @@ export class CPU {
     disableInterruptsCounter: number;
 
     constructor() {
-        this.A = 0;
-        this.B = 0;
-        this.C = 0;
-        this.D = 0;
-        this.E = 0;
+        this.A = INITIAL_A_REG_VALUE;
+        this.B = INITIAL_B_REG_VALUE;
+        this.C = INITIAL_C_REG_VALUE;
+        this.D = INITIAL_D_REG_VALUE;
+        this.E = INITIAL_E_REG_VALUE;
+        this.HL = INITIAL_HL_REG_VALUE;
 
         // NOTE: According to BGB Debugger. This register is initialized to 0xB0 (eg: zero, hc, and carry flags on)
-        this.F = 0xB0;
+        this.F = INITIAL_F_REG_VALUE;
 
         this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // -1 means to ignore this counter
     }

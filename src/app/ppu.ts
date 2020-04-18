@@ -109,7 +109,7 @@ class OAMEntry {
 
 // Graphics Special Registers
 
-const INITIAL_LCDC_VALUE = 0x00;
+const INITIAL_LCDC_VALUE = 0x91;
 export class LCDC {
     public RawValue: number;
 
@@ -362,6 +362,8 @@ export class PPU {
             this.LCDC_REGISTER.update(value);
         } else if (addr === Address.LY_ADDR) {
             // ignore. this is a read-only register
+            // attempting to write to LY register causes it's value to be reset
+            this.LY = 0;
         } else if (addr === Address.SCROLLY_ADDR) {
             this.SCROLL_Y = value
         } else if (addr === Address.SCROLLX_ADDR) {
