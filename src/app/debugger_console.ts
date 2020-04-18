@@ -19,7 +19,6 @@ export function loadBreakpoints(filename: string): Breakpoint[] {
 abstract class Breakpoint {
     static from(command: string): Breakpoint {
       const words = command.toLowerCase().split(' ');
-      console.log(`words = ${words.join('|')}`);
       const cmd = words[0];
       const args = words.slice(1);
 
@@ -33,6 +32,9 @@ abstract class Breakpoint {
         const startAddr = parseInt(args[0], 16);
         const endAddr = parseInt(args[0], 16);
         return new AddressRangeValueChangeBreakpoint(startAddr, endAddr);
+      } else if (cmd === "opcode") {
+          const opcode = parseInt(args[0], 16);
+          return new OpCodeBreakpoint(opcode);
       }
     }
 
@@ -55,6 +57,23 @@ export class AddressBreakpoint {
    }
 }
 
+export class OpCodeBreakpoint {
+    public opcode: number;
+
+    constructor(opcode: number) {
+        this.opcode = opcode;
+    }
+
+    public hasTriggered(gb: Gameboy): boolean {
+        return gb.cpu.lastExecutedOpCode === this.opcode;
+    }
+
+    public toString() {
+        return `<OpCodeBreakpoint opcode=${this.opcode}>`;
+    }
+}
+
+// trigger whenever the value at specified address has changed
 export class AddressValueChangeBreakpoint {
     public address: number;
 
@@ -67,6 +86,7 @@ export class AddressValueChangeBreakpoint {
     }
 }
 
+// trigger whenever the value at specified address RANGE has changed
 export class AddressRangeValueChangeBreakpoint {
     public startAddr: number;
     public endAddr: number;
@@ -109,6 +129,7 @@ export class DebugConsole {
         LY = ${displayAsHex(this.gameboy.ppu.LY)} (${this.gameboy.ppu.LY})
         WINDOWX = ${displayAsHex(this.gameboy.ppu.WINDOWX)} (${this.gameboy.ppu.WINDOWX})
         WINDOWY = ${displayAsHex(this.gameboy.ppu.WINDOWY)} (${this.gameboy.ppu.WINDOWY})
+        LCDC = ${displayAsHex(this.gameboy.ppu.LCDC_REGISTER.RawValue)}
         isDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isDisplayOn()}
         isWindowDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isWindowDisplayOn()}
         isObjSpriteDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isObjSpriteDisplayOn()}
@@ -128,6 +149,9 @@ export class DebugConsole {
         E = ${displayAsHex(this.gameboy.cpu.E)}
         HL = ${displayAsHex(this.gameboy.cpu.HL)}
         SP = ${displayAsHex(this.gameboy.cpu.SP)}
+        IME = ${displayAsHex(this.gameboy.cpu.IME)}
+        IF = ${displayAsHex(this.gameboy.cpu.IF.RawValue)}
+        IE = ${displayAsHex(this.gameboy.cpu.IE.RawValue)}
         ZeroFlag = ${this.gameboy.cpu.getFlag(ZERO_FLAG)}
         SubtractionFlag = ${this.gameboy.cpu.getFlag(SUBTRACTION_FLAG)}
         HalfCarry = ${this.gameboy.cpu.getFlag(HALF_CARRY_FLAG)}

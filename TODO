@@ -1,7 +1,10 @@
-1. Get frontend to run again:w
-2. Clean up unused functionality. eg: WebWorker
-3. Implement WebSocket server. So frontend gets updates on changes to Gameboy
-4. Finish implementing PPU rendering process
-5. Implement interrupts
-.......
-?. Get breakpoints working when running emulator via CLI
+FEATURES
+1. Finish implementing PPU rendering process
+2. Implement interrupts
+
+BUGS
+1. SP address gets messed up. (repo: put breakpoint at addr 0x027B. not SP is 0. shouldn't be)
+2. Zero flag is not updated correctly for all cases
+3. IF register is not being updated correctly
+4. LY increases too quickly (repo: breakpoint at 0x022F. bgb has LY=0x3E, mine has LY=0x92
+5. "OAM Search found these 10 visible objects:" log displayed when it shouldn't have

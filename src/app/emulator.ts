@@ -307,6 +307,9 @@ export class CPU {
     // instruction counter for disabling instructions
     disableInterruptsCounter: number;
 
+    // [used by DebuggerConsole] Opcode of the last executed instruction
+    public lastExecutedOpCode: number;
+
     constructor() {
         this.A = INITIAL_A_REG_VALUE;
         this.B = INITIAL_B_REG_VALUE;
@@ -444,7 +447,7 @@ export class CPU {
         }
 
         return wasInterruptInvoked;
-      }
+    }
 
     /*private readTwoByteAddr(lsbAddr) {
         const lsb = this.bus.readByte(lsbAddr);
@@ -453,7 +456,9 @@ export class CPU {
     }*/
     
     // READ-ONLY. Just eads next instruction and disassemblies it as a string
-    // This function does not modify anything
+    // This does not execute the instruction. Just returns it as string.
+    // TODO: Setting the lastExecutedOpCode value is a side effect. Only used by the debugger so we can
+    //       break on specific opcode. High coupling.
     // TODO: Now that we separated printing from executing instruction. We have shotgun surgory situation.
     //       Adding a new instruction requires modifying this method and the 'executeNextInstruction' method.
     //       Figure out a way around this.
@@ -466,32 +471,42 @@ export class CPU {
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
 
+            this.lastExecutedOpCode = 0x31;
             return `LD SP, ${displayAsHex(addr)}`;
         } else if (currByte === 0x00) {
-          return "NOP";
+            this.lastExecutedOpCode = 0x00;
+            return "NOP";
         } else if (currByte === 0xC3) {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb << 8) | lsb;
+            this.lastExecutedOpCode = 0xC3;
             return `JP ${displayAsHex(addr)}`;
         } else if (currByte === 0xAF) {
+            this.lastExecutedOpCode = 0xAF;
             return "XOR A";
         } else if (currByte === 0x21) {
             let lsb = this.bus.readByte(this.PC + 1);
             let msb = this.bus.readByte(this.PC + 2);
             const value = (msb << 8) | lsb;
+            this.lastExecutedOpCode = 0x21;
             return `LD HL, ${displayAsHex(value)}`;
         } else if (currByte === 0x0E) {
             const value = this.bus.readByte(this.PC + 1);
+            this.lastExecutedOpCode = 0x0E;
             return `LD C, ${value}`;
         } else if (currByte === 0x06) {
             const value = this.bus.readByte(this.PC + 1);
+            this.lastExecutedOpCode = 0x06;
             return `LD B, ${displayAsHex(value)}`;
         } else if (currByte === 0x32) {
+            this.lastExecutedOpCode = 0x32;
             return "LD (HL-), A";
         } else if (currByte === 0x05) {
+            this.lastExecutedOpCode = 0x05;
             return "DEC B";
         } else if (currByte === 0x20) {
+            this.lastExecutedOpCode = 0x20;
             const value = this.bus.readByte(this.PC + 1);
             const offset = makeSigned(value, 1);
             if (!this.getFlag(ZERO_FLAG)) {
@@ -500,107 +515,146 @@ export class CPU {
                 return `JR NZ, ${offset} [not jumped]`;
             }
         } else if (currByte === 0x0D) {
+            this.lastExecutedOpCode = 0x0D;
             return `DEC C`;
         } else if (currByte === 0x1D) {
+            this.lastExecutedOpCode = 0x1D;
             return `DEC E`;
         } else if (currByte === 0x16) {
+            this.lastExecutedOpCode = 0x16;
             const value = this.bus.readByte(this.PC + 1);
             return `LD D, ${displayAsHex(value)}`;
         } else if (currByte === 0x1F) {
+            this.lastExecutedOpCode = 0x1F;
             return "RRA";
         } else if (currByte === 0x25) {
+            this.lastExecutedOpCode = 0x25;
             return "DEC H";
         } else if (currByte === 0x15) {
+            this.lastExecutedOpCode = 0x15;
             return "DEC D";
         } else if (currByte === 0xB0) {
+            this.lastExecutedOpCode = 0xB0;
             return "OR B";
         } else if (currByte === 0x14) {
+            this.lastExecutedOpCode = 0x14;
             return "INC D";
         } else if (currByte === 0x7B) {
+            this.lastExecutedOpCode = 0x7B;
             return "LD A, E";
         } else if (currByte === 0xBF) {
+            this.lastExecutedOpCode = 0xBF;
             return "CP A";
         } else if (currByte === 0x29) {
+            this.lastExecutedOpCode = 0x29;
             return "ADD HL, HL";
         } else if (currByte === 0x19) {
+            this.lastExecutedOpCode = 0x19;
             return "ADD HL, DE";
         } else if (currByte === 0x77) {
+            this.lastExecutedOpCode = 0x77;
             return "LD (HL), A";
         } else if (currByte === 0x07) {
+            this.lastExecutedOpCode = 0x07;
             return "RLCA [NOT IMPL]";
         } else if (currByte === 0x08) {
+            this.lastExecutedOpCode = 0x08;
             let lsb = this.bus.readByte(this.PC + 1);
             let msb = this.bus.readByte(this.PC + 2);
             const addr = (msb << 8) | lsb;
             return `LD (${displayAsHex(addr)}), SP`;
         } else if (currByte === 0x12) {
+            this.lastExecutedOpCode = 0x12;
             return "LD (DE), A";
         } else if (currByte === 0x0C) {
+            this.lastExecutedOpCode = 0x0C;
             return "INC C";
         } else if (currByte === 0xD2) {
+            this.lastExecutedOpCode = 0xD2;
             let lsb = this.bus.readByte(this.PC + 1);
             let msb = this.bus.readByte(this.PC + 2);
             const addr = (msb << 8) | lsb;
             return `JP NC, ${displayAsHex(addr)}`;
         } else if (currByte === 0x10) {
+            this.lastExecutedOpCode = 0x10;
             console.log("STOP 0 (not implemented. no button press support yet");
         } else if (currByte === 0x18) {
+            this.lastExecutedOpCode = 0x18;
             let offset = this.bus.readByte(this.PC + 1);
             return `JR ${offset}`;
         } else if (currByte === 0x7F) {
+            this.lastExecutedOpCode = 0x7F;
             return "LD A, A";
         } else if (currByte === 0x7C) {
+            this.lastExecutedOpCode = 0x7C;
             return "LD A, H";
         } else if (currByte === 0x78) {
+            this.lastExecutedOpCode = 0x78;
             return "LD A, B";
         } else if (currByte === 0x79) {
+            this.lastExecutedOpCode = 0x79;
             return "LD A, C";
         } else if (currByte === 0xFF) {
+            this.lastExecutedOpCode = 0xFF;
             return "RST 38H";
         } else if (currByte === 0x3E) {
+            this.lastExecutedOpCode = 0x3E;
             let value = this.bus.readByte(this.PC + 1);
             return `LD A, ${displayAsHex(value)}`;
         } else if (currByte === 0xF3) {
+            this.lastExecutedOpCode = 0xF3;
             return "DI";
         } else if (currByte === 0xE0) {
+            this.lastExecutedOpCode = 0xE0;
             let value = this.bus.readByte(this.PC + 1);
             return `LDH (${0xFF00 + value}), A`;
         } else if (currByte === 0xF0) {
+            this.lastExecutedOpCode = 0xF0;
             let value = this.bus.readByte(this.PC + 1);
             return `LDH A, (${0xFF00 + value})`;
         } else if (currByte === 0xFE) {
+            this.lastExecutedOpCode = 0xFE;
             let value = this.bus.readByte(this.PC + 1);
             return `CP ${value}`;
         } else if (currByte === 0x36) {
+            this.lastExecutedOpCode = 0x36;
             const value = this.bus.readByte(this.PC + 1);
             return `LD (HL), ${value}`;
         } else if (currByte === 0xEA) {
+            this.lastExecutedOpCode = 0xEA;
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
             return `LDH (${addr}), A`;
         } else if (currByte === 0x2A) {
+            this.lastExecutedOpCode = 0x2A;
             return "LD A, (HL+)";
         } else if (currByte === 0xE2) {
+            this.lastExecutedOpCode = 0xE2;
             return `LD (C), A`;
         } else if (currByte === 0xF2) {
+            this.lastExecutedOpCode = 0xF2;
             return `LD A, (C)`;
         } else if (currByte === 0xCD) {
+            this.lastExecutedOpCode = 0xCD;
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const addr = (msb >> 8) & lsb;
             return `CALL ${displayAsHex(addr)}`;
         } else if (currByte === 0x01) {
-            // LD BC, d16
+            this.lastExecutedOpCode = 0x01;
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
             const value = (msb >> 8) & lsb;
             return `LD BC, ${displayAsHex(value)}`;
         } else if (currByte === 0xD9) {
+            this.lastExecutedOpCode = 0xD9;
             return 'RETI';
         } else if (currByte === 0xC9) {
+            this.lastExecutedOpCode = 0xC9;
             return `RET <two-byte-stack-pop>`;
         } else if (currByte === 0xFB) {
+            this.lastExecutedOpCode = 0xFB;
             return 'EI';
         }
     }
@@ -1146,12 +1200,13 @@ export class Gameboy {
           continue;
       }
   
+      const disassembled = this.cpu.disassembleNextInstruction();
       const shouldShowDebugger = this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered();
       if (shouldShowDebugger) {
           // Asterisk indicates this is the current instruction (hasn't been executed yet)
           process.stdout.write("* ");
       }
-      console.log(this.cpu.disassembleNextInstruction());
+      console.log(disassembled);
       if (shouldShowDebugger) {
         // suspend execution until a key is pressed
         this.debugger.showConsole();
