@@ -469,7 +469,7 @@ export class CPU {
     	if (currByte === 0x31) {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = (msb << 8) | lsb;
 
             this.lastExecutedOpCode = 0x31;
             return `LD SP, ${displayAsHex(addr)}`;
@@ -674,7 +674,7 @@ export class CPU {
             // 3 byte instruction
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = (msb << 8) | lsb;
             this.SP = addr;
             this.PC += 3;
 
@@ -1197,6 +1197,7 @@ export class Gameboy {
       // process interrupts
       if (this.processInterrupts()) {
           // interrupt was invoked. So do nothing else and start executing the interrupt on next step
+          console.log("ERROR INTERRUPTS ARE NOT IMPLEMENTED YET");
           continue;
       }
   
