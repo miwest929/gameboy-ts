@@ -32,6 +32,7 @@ export enum Address {
     // so you should try it yourself.)
     WINDOWY_ADDR = 0xff4a,
     WINDOWX_ADDR = 0xff4b,
+
     BGP_ADDR = 0xff47,
     OBP0_ADDR = 0xff48, // FF48 - OBP0 - Object Palette 0 Data (R/W) - Non CGB Mode Only
                         // This register assigns gray shades for sprite palette 0. It works
@@ -246,52 +247,68 @@ class LCDCStatus {
 //  1  Light gray
 //  2  Dark gray
 //  3  Black
-const BGP_COLORS = {
-    White: 0,
-    LightGray: 1,
-    DarkGray: 2,
-    Black: 3
-} as const;
-type BGP_COLORS = typeof BGP_COLORS[keyof typeof BGP_COLORS];
-interface IBGP {
+
+const INITIAL_BGP_VALUE = 0xFC;
+const INITIAL_SPRITE_VALUE = 0xFF;
+
+// color 00 is transparant
+class SpritePalette {
     RawValue: number;
-    ColorThreeShade: number,
-    ColorTwoShade: number,
-    ColorOneShade: number,
-    ColorZeroShade: number
+    ColorThree: number;
+    ColorTwo: number;
+    ColorOne: number;
+    // ColorZero: number; color zero is transparant
+
+    constructor(initialValue) {
+        this.update(initialValue);
+    }
+
+    update(value: number) {
+        this.RawValue = value;
+        this.parseSpriteRegister(value);
+    }  
+
+    private parseSpriteRegister(value: number) {
+        this.ColorThree = (value & 0xC0) >> 6;
+        this.ColorTwo = (value & 0x30) >> 4;
+        this.ColorOne = (value & 0x0C) >> 2;
+    }
 }
-const parseBGPRegister = (value: number): IBGP => {
-    const colorThree = (value & 0xC0) >> 6;
-    const colorTwo = (value & 0x30) >> 4;
-    const colorOne = (value & 0x0C) >> 2;
-    const colorZero = (value & 0x03);
 
-    return {
-        RawValue: value,
-        ColorThreeShade: colorThree,
-        ColorTwoShade: colorTwo,
-        ColorOneShade: colorOne,
-        ColorZeroShade: colorZero,
-    };
+enum BGP_COLOR {
+    White = 0,
+    LightGray = 1,
+    DarkGray = 2,
+    Black = 3
 }
 
-// Color codes
-//  0b11 | white      |
-const WHITE_PIXEL = 0x3;
+class BGPPalette {
+    RawValue: number;
+    ColorThree: number;
+    ColorTwo: number;
+    ColorOne: number;
+    ColorZero: number;
 
-// | 0b10 | dark-gray  |
-const DARK_GRAY_PIXEL = 0x2;
+    constructor(initialValue) {
+      this.update(initialValue);
+    }
 
-// | 0b01 | light-gray |
-const LIGHT_GRAY_PIXEL = 0x1;
+    update(value: number) {
+      this.RawValue = value;
+      this.parseBGPRegister(value);
+    }
 
-// | 0b00 | black
-const BLACK_PIXEL = 0x0;
+    private parseBGPRegister(value: number) {
+      this.ColorThree = (value & 0xC0) >> 6;
+      this.ColorTwo = (value & 0x30) >> 4;
+      this.ColorOne = (value & 0x0C) >> 2;
+      this.ColorZero = (value & 0x03);
+    }
+}
 
 // Every byte is 4 pixels. 2 bytes per row
 // Each tile are 8x8 pixels. Each pixel occupies 2 bits. 128 bits / 8 = 16 bytes
 // tiles are 16 bytes long
-
 interface IScreenBuffer {
     widthInPx: number;
     heightInPx: number;
@@ -323,10 +340,10 @@ export class PPU {
     public SCROLL_Y: number;
     public SCROLL_X: number;
     public LCDC_REGISTER: LCDC;
-    public BGP_PALETTE_DATA: IBGP; // TODO: initialize to the correct initial value
+    public BGP_PALETTE: BGPPalette; // TODO: initialize to the correct initial value
+    public OBP0_PALETTE: SpritePalette;
+    public OBP1_PALETTE: SpritePalette;
     public LCDC_STATUS: LCDCStatus; // TODO: initialize to the correct initial value
-
-    //public isDisplayOn: boolean; // derived from value of LCDC special register
 
     private clock: number;
     private bus: MemoryBus;
@@ -342,6 +359,9 @@ export class PPU {
         this.WINDOWY = 0x00;
         this.LCDC_REGISTER = new LCDC();
         this.LCDC_STATUS = new LCDCStatus();
+        this.BGP_PALETTE = new BGPPalette(INITIAL_BGP_VALUE);
+        this.OBP0_PALETTE = new SpritePalette(INITIAL_SPRITE_VALUE);
+        this.OBP1_PALETTE = new SpritePalette(INITIAL_SPRITE_VALUE);
     }
 
     public setMemoryBus(bus: MemoryBus) {
@@ -358,7 +378,7 @@ export class PPU {
 
     public writeSpecialRegister(addr: number, value: number) {
         if (addr === Address.LCDC_ADDR) {
-            console.log("WRITE TO the LCDC special register");
+            //console.log("WRITE TO the LCDC special register");
             this.LCDC_REGISTER.update(value);
         } else if (addr === Address.LY_ADDR) {
             // ignore. this is a read-only register
@@ -371,13 +391,15 @@ export class PPU {
         } else if (addr === Address.STAT_ADDR) {
             this.LCDC_STATUS.update(value);
         } else if (addr === Address.BGP_ADDR) {
-            this.BGP_PALETTE_DATA = parseBGPRegister(value);
+            this.BGP_PALETTE.update(value);
         } else if (addr === Address.WINDOWY_ADDR) {
             this.WINDOWY = value;
         } else if (addr === Address.WINDOWX_ADDR) {
             this.WINDOWX = value;
         } else if (addr === Address.OBP0_ADDR) {
+            this.OBP0_PALETTE.update(value);
         } else if (addr === Address.OBP1_ADDR) {
+            this.OBP1_PALETTE.update(value);
         } else {
             console.error(`Don't support writing to special reg at addr ${addr}`);
         }
@@ -387,7 +409,7 @@ export class PPU {
         if (addr === Address.LCDC_ADDR) {
             return this.LCDC_REGISTER.RawValue;
         } else if (addr === Address.LY_ADDR) {
-            console.log("READ the LY special register");
+            //console.log("READ the LY special register");
             return this.LY;
         } else if (addr === Address.SCROLLY_ADDR) {
             return this.SCROLL_Y;
@@ -396,7 +418,11 @@ export class PPU {
         } else if (addr === Address.STAT_ADDR) {
             return this.LCDC_STATUS.RawValue;
         } else if (addr === Address.BGP_ADDR) {
-            return this.BGP_PALETTE_DATA.RawValue;
+            return this.BGP_PALETTE.RawValue;
+        } else if (addr === Address.OBP0_ADDR) {
+            return this.OBP0_PALETTE.RawValue;
+        } else if (addr === Address.OBP1_ADDR) {
+            return this.OBP1_PALETTE.RawValue;
         } else if (addr === Address.WINDOWY_ADDR) {
             return this.WINDOWY;
         } else if (addr === Address.WINDOWX_ADDR) {

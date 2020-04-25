@@ -133,11 +133,14 @@ export class DebugConsole {
         LY = ${displayAsHex(this.gameboy.ppu.LY)} (${this.gameboy.ppu.LY})
         WINDOWX = ${displayAsHex(this.gameboy.ppu.WINDOWX)} (${this.gameboy.ppu.WINDOWX})
         WINDOWY = ${displayAsHex(this.gameboy.ppu.WINDOWY)} (${this.gameboy.ppu.WINDOWY})
+        ========================================================
         LCDC = ${displayAsHex(this.gameboy.ppu.LCDC_REGISTER.RawValue)}
         isDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isDisplayOn()}
         isWindowDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isWindowDisplayOn()}
         isObjSpriteDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isObjSpriteDisplayOn()}
         isBackgroundAndWindowDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isBackgroundAndWindowDisplayOn()}
+        ========================================================
+        STAT = ${displayAsHex(this.gameboy.ppu.LCDC_STATUS.RawValue)}
         ---------------------- PPU ---------------------
         `);
     }

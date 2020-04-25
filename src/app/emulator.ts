@@ -180,7 +180,7 @@ export class MemoryBus {
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             console.warn("I/O Registers aren't supported yet");
-        } else {
+        } else if (addr < 0xFEA0 && addr > 0xFEFF) { // addr between FEA0 and FEFF are unused. Writing to them should be ignored
             this.memory.write(addr, value);
         }
     }
@@ -198,6 +198,8 @@ export class MemoryBus {
         } else if (addr === IE_ADDR) {
             // interrupt request register
             return this.cpu.IE.RawValue;
+        } else if (addr >= 0xFEA0 && addr <= 0xFEFF) { // reading from unused memory should return 0x00
+            return 0x00;
         } else {
             return this.memory.read(addr);
         }
@@ -465,7 +467,6 @@ export class CPU {
     //       Adding a new instruction requires modifying this method and the 'executeNextInstruction' method.
     //       Figure out a way around this.
     public disassembleNextInstruction(): string {
-        process.stdout.write(`[${displayAsHex(this.PC)}]: `); // print out the address (no newline)
         const currByte = this.bus.readByte(this.PC);
         
     	if (currByte === 0x31) {
@@ -1195,19 +1196,18 @@ export class Gameboy {
 
     let keepRunning = true;
     while (keepRunning) {
+      const prevProgramCounter = this.cpu.PC;
       const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
       const shouldShowDebugger = this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered();
-      if (shouldShowDebugger && this.inDebugMode) {
-          // Asterisk indicates this is the current instruction (hasn't been executed yet)
-          process.stdout.write("* ");
-      }
 
-      if (this.inDebugMode) {
-          console.log(disassembled);
-      }
+      //if (shouldShowDebugger && this.inDebugMode) {
+          // Asterisk indicates this is the current instruction (hasn't been executed yet)
+          // process.stdout.write("* ");
+      //}
 
       if (shouldShowDebugger) {
         // suspend execution until a key is pressed
+        console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
         this.debugger.showConsole();
       }
 
