@@ -668,6 +668,39 @@ export class CPU {
         } else if (currByte === 0xB1) {
             this.lastExecutedOpCode = 0xB1;
             return 'OR C';
+        } else if (currByte === 0xF5) {
+            this.lastExecutedOpCode = 0xF5;
+            return 'PUSH AF'
+        } else if (currByte === 0xC5) {
+            this.lastExecutedOpCode = 0xC5;
+            return 'PUSH BC'
+        } else if (currByte === 0xD5) {
+            this.lastExecutedOpCode = 0xD5;
+            return 'PUSH DE'
+        } else if (currByte === 0xE5) {
+            this.lastExecutedOpCode = 0xE5;
+            return 'PUSH HL'
+        } else if (currByte === 0xA7) {
+            this.lastExecutedOpCode = 0xA7;
+            return 'AND A';
+        } else if (currByte === 0xA0) {
+            this.lastExecutedOpCode = 0xA0;
+            return 'AND B';
+        } else if (currByte === 0xA1) {
+            this.lastExecutedOpCode = 0xA1;
+            return 'AND C';
+        } else if (currByte === 0xA2) {
+            this.lastExecutedOpCode = 0xA2;
+            return 'AND D';
+        } else if (currByte === 0xA3) {
+            this.lastExecutedOpCode = 0xA3;
+            return 'AND E';
+        } else if (currByte === 0xA4) {
+            this.lastExecutedOpCode = 0xA4;
+            return 'AND H';
+        } else if (currByte === 0xA5) {
+            this.lastExecutedOpCode = 0xA5;
+            return 'AND L';
         }
     }
 
@@ -1116,6 +1149,93 @@ export class CPU {
             this.clearFlag(HALF_CARRY_FLAG);
             this.clearFlag(CARRY_FLAG);
 
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xF5) {
+            // PUSH AF
+            this.stackPush(this.A);
+            this.stackPush(this.F);
+            this.PC++;
+            return 16;
+        } else if (currByte === 0xC5) {
+            // PUSH BC
+            this.stackPush(this.B);
+            this.stackPush(this.C);
+            this.PC++;
+            return 16;
+        } else if (currByte === 0xD5) {
+            // PUSH DE
+            this.stackPush(this.D);
+            this.stackPush(this.E);
+            this.PC++;
+            return 16;
+        } else if (currByte === 0xE5) {
+            // PUSH HL
+            this.stackPush(this.H());
+            this.stackPush(this.L());
+            this.PC++;
+            return 16;
+        } else if (currByte === 0xA7) {
+            // AND A
+            this.A = this.A & this.A;
+            this.updateZeroFlag(this.A);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA0) {
+            // AND B
+            this.A = this.A & this.B;
+            this.updateZeroFlag(this.B);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA1) {
+            // AND C
+            this.A = this.A & this.C;
+            this.updateZeroFlag(this.C);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA2) {
+            // AND D
+            this.A = this.A & this.D;
+            this.updateZeroFlag(this.D);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA3) {
+            // AND E
+            this.A = this.A & this.E;
+            this.updateZeroFlag(this.E);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA4) {
+            // AND H
+            this.A = this.A & this.H();
+            this.updateZeroFlag(this.H());
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
+            this.PC++;
+            return 4;
+        } else if (currByte === 0xA5) {
+            // AND L
+            this.A = this.A & this.L();
+            this.updateZeroFlag(this.L());
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.setFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);            
             this.PC++;
             return 4;
         }
