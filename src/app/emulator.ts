@@ -625,9 +625,7 @@ export class CPU {
             return `LD (HL), ${value}`;
         } else if (currByte === 0xEA) {
             this.lastExecutedOpCode = 0xEA;
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = this.readTwoByteValue(this.PC + 1)
             return `LDH (${addr}), A`;
         } else if (currByte === 0x2A) {
             this.lastExecutedOpCode = 0x2A;
@@ -640,15 +638,11 @@ export class CPU {
             return `LD A, (C)`;
         } else if (currByte === 0xCD) {
             this.lastExecutedOpCode = 0xCD;
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = this.readTwoByteValue(this.PC + 1);
             return `CALL ${displayAsHex(addr)}`;
         } else if (currByte === 0x01) {
             this.lastExecutedOpCode = 0x01;
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const value = (msb >> 8) & lsb;
+            const value = this.readTwoByteValue(this.PC + 1);
             return `LD BC, ${displayAsHex(value)}`;
         } else if (currByte === 0xD9) {
             this.lastExecutedOpCode = 0xD9;
@@ -1007,11 +1001,8 @@ export class CPU {
             return 12;
         } else if (currByte === 0xEA) {
             // LDH (a16), A
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = this.readTwoByteValue(this.PC + 1);
             this.bus.writeByte(addr, this.A);
-
             this.PC += 3;
             return 16;
         } else if (currByte === 0x2A) {
@@ -1035,9 +1026,7 @@ export class CPU {
             return 8;
         } else if (currByte === 0xCD) {
             // CALL a16
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb >> 8) & lsb;
+            const addr = this.readTwoByteValue(this.PC + 1);
 
             // push address after this instruction on to the stack
             const returnAddr = this.PC + 3; // 3 because this instruction is 3 bytes long
@@ -1063,7 +1052,7 @@ export class CPU {
             // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
             const msb = this.stackPop();
             const lsb = this.stackPop();
-            const addr = (msb >> 8) & lsb;
+            const addr = (msb << 8) | lsb;
 
             this.IME = 0x01; // globally enable interrupts
             this.PC = addr;
@@ -1074,7 +1063,7 @@ export class CPU {
             // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
             const msb = this.stackPop();
             const lsb = this.stackPop();
-            const addr = (msb >> 8) & lsb;
+            const addr = (msb << 8) | lsb;
             this.PC = addr;
 
             return 16;

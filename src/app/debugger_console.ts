@@ -218,6 +218,12 @@ export class DebugConsole {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
                 this.displayMemoryAddressValue(addr);
+            } else if (command === "setbp" || command === "setbreakpoint") {
+                console.log("SETTING A BREAKPOINT");
+                const args = command.split(' ').slice(1);
+                const addr = parseInt(args[0], 16);
+                this.breakpoints.push(new AddressBreakpoint(addr));
+                console.log(`Set new breakpoint at address 0x${displayAsHex(addr)}`);
             }
         }
     } 
