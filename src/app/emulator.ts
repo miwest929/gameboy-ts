@@ -75,7 +75,10 @@ export enum Interrupt {
   LCDCSTAT = 0x02,
   TIMER = 0x04,
   SERIAL = 0x08,
-  JOYPAD = 0x10
+  JOYPAD = 0x10,
+  UNUSED1 = 0x20,
+  UNUSED2 = 0x40,
+  UNUSED3 = 0x80
 };
 
 enum InterruptAddress {
@@ -157,16 +160,16 @@ export class MemoryBus {
 
         if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
             // if writing to memory mapped vram
-            console.log("WRITING TO VRAM!!");
             this.ppu.writeToVRAM(addr - Address.VRAM_ADDR_BEGIN, value);
         } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - Address.OAM_ADDR_BEGIN, value);
         } else if (addr === IF_ADDR) {
             // interrupt request register
-            console.log("*&*&*&*&*&* INTERRUPT REQUESTED *&*&*&*&*&*&");
+            //if (value === 0xE1) {
+            //    this.cpu.
+            //}
             this.cpu.IF.RawValue = value;
         } else if (addr === IE_ADDR) {
-            console.log("*&*&*&*&*&* INTERRUPT ENABLED *&*&*&*&*&*&");
             this.cpu.IE.RawValue = value;
         } else if (addr === 0xff46) { // DMA Transfer and Start Address
             // Initiate DMA Transfer.
@@ -384,8 +387,8 @@ export class CPU {
             return false;
         }
 
-        if (this.disableInterruptsCounter === 0) {
-            return true;
+       if (this.disableInterruptsCounter === 0) {
+             return true;
         }
 
         this.disableInterruptsCounter--;
@@ -412,9 +415,11 @@ export class CPU {
           Joypad interrupts has lowest
         */
         let wasInterruptInvoked = false;
+        const returnAddr = this.PC;
         if (this.IE.VBlankEnabled() && this.IF.VBlankRequested()) {
            // jump to vblank int address
            this.IF.ClearRequest(Interrupt.VBLANK);
+
            this.PC = InterruptAddress.VBLANK;
            wasInterruptInvoked = true;
         } else if (this.IE.LCDStatEnabled() && this.IF.LCDStatRequested()) {
@@ -437,23 +442,20 @@ export class CPU {
 
         if (wasInterruptInvoked) {
             // disable future interrupts until they're enabled again
-            this.IME = 0x00;
-
             /*
                 1. Two wait states are executed (2 machine cycles pass while nothing occurs, presumably the CPU is executing NOPs during this time).
                 2. The current PC is pushed onto the stack, this process consumes 2 more machine cycles.
                 3. The high byte of the PC is set to 0, the low byte is set to the address of the handler ($40,$48,$50,$58,$60). This consumes one last machine cycle.
             */
+            this.IME = 0x00;
+            console.log(`****************** INVOKED INTERRUPT. PC = ${this.PC} *********************`);
+            const [higherByte, lowerByte] = this.split16BitValueIntoTwoBytes(returnAddr);
+            this.stackPush(higherByte);
+            this.stackPush(lowerByte);
         }
 
         return wasInterruptInvoked;
     }
-
-    /*private readTwoByteAddr(lsbAddr) {
-        const lsb = this.bus.readByte(lsbAddr);
-        const msb = this.bus.readByte(lsbAddr + 1);
-        return (msb >> 8) & lsb;        
-    }*/
     
     // READ-ONLY. Just eads next instruction and disassemblies it as a string
     // This does not execute the instruction. Just returns it as string.
@@ -659,6 +661,12 @@ export class CPU {
         }
     }
 
+    private readTwoByteValue(baseAddr: number) {
+        const lsb = this.bus.readByte(baseAddr);
+        const msb = this.bus.readByte(baseAddr + 1);
+        return (msb << 8) | lsb;        
+    }
+
     // Due to JMP, RET instructions this fn must modify the PC register itself.
     // The return value is the number of cycles the instruction took
     // Instruction cycle counts can be found here: http://www.pastraiser.com/cpu/gameboy/gameboy_opcodes.html
@@ -672,10 +680,7 @@ export class CPU {
     	if (currByte === 0x31) {
             // LD SP, N
             // 3 byte instruction
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb << 8) | lsb;
-            this.SP = addr;
+            this.SP = this.readTwoByteValue(this.PC + 1);
             this.PC += 3;
 
             return 12;
@@ -685,37 +690,27 @@ export class CPU {
           return 4;
         } else if (currByte === 0xC3) {
             // JP 2-byte-address
-            const lsb = this.bus.readByte(this.PC + 1);
-            const msb = this.bus.readByte(this.PC + 2);
-            const addr = (msb << 8) | lsb;
-            this.PC = addr;
+            this.PC = this.readTwoByteValue(this.PC + 1);;
             return 16;
         } else if (currByte === 0xAF) {
             // XOR A  (1 byte, 4 cycles)
             this.A = this.A ^ this.A;
             this.updateZeroFlag(this.A);
-
             this.PC++;
             return 4;
         } else if (currByte === 0x21) {
-            // LD HL,d16 (3 bytes, 12 cycles)
-            let lsb = this.bus.readByte(this.PC + 1);
-            let msb = this.bus.readByte(this.PC + 2);
-            const value = (msb << 8) | lsb;
-            this.HL = value;
+            // LD HL, d16 (3 bytes, 12 cycles)
+            this.HL = this.readTwoByteValue(this.PC + 1);
             this.PC += 3;
             return 12;
         } else if (currByte === 0x0E) {
             // LD C,d8
-            const value = this.bus.readByte(this.PC + 1);
-            this.C = value;
-            
+            this.C = this.bus.readByte(this.PC + 1);;            
             this.PC += 2;
             return 8;
         } else if (currByte === 0x06) {
             // LD B,d8
-            const value = this.bus.readByte(this.PC + 1);
-            this.B = value;
+            this.B = this.bus.readByte(this.PC + 1);
             
             this.PC += 2;
             return 8;
@@ -730,10 +725,9 @@ export class CPU {
             return 8;
         } else if (currByte === 0x05) {
             // DEC B
-            // TODO: Verify is wrapping is correct behavior for DEC B instruction. Also, how is the Zero flag
-            //       suppossed to be updated?
+            // TODO: How is the Zero flag suppossed to be updated?
             const result = wrappingByteSub(this.B, 1);
-            this.updateHalfCarryFlag(this.B, 1);
+            this.updateSubHalfCarryFlag(this.B, 1);
             this.B = result[0];
             this.setFlag(SUBTRACTION_FLAG);
 
@@ -761,7 +755,7 @@ export class CPU {
         } else if (currByte === 0x0D) {
             // DEC C
             const result = wrappingByteSub(this.C, 1);
-            this.updateHalfCarryFlag(this.C, 1);
+            this.updateSubHalfCarryFlag(this.C, 1);
             this.C = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.C);
@@ -772,7 +766,7 @@ export class CPU {
         } else if (currByte === 0x1D) {
             // DEC E
             const result = wrappingByteSub(this.E, 1);
-            this.updateHalfCarryFlag(this.E, 1);
+            this.updateSubHalfCarryFlag(this.E, 1);
             this.E = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.E);
@@ -811,7 +805,7 @@ export class CPU {
         } else if (currByte === 0x15) {
             // DEC D
             const result = wrappingByteSub(this.D, 1);
-            this.updateHalfCarryFlag(this.D, 1);
+            this.updateSubHalfCarryFlag(this.D, 1);
             this.D = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.D);
@@ -874,7 +868,6 @@ export class CPU {
             return 8;
         } else if (currByte === 0x77) {
             // LD (HL),A
-            console.log("LD (HL), A");
             this.bus.writeByte(this.HL, this.A);
             this.PC++;
             return 8;
@@ -890,14 +883,12 @@ export class CPU {
             const addr = (msb << 8) | lsb;
             this.bus.writeByte(addr, this.SP);
 
-            console.log(`LD (${addr}), SP`);
             this.PC += 3;
             return 20;
         } else if (currByte === 0x12) {
             // LD (DE), A
             this.bus.writeByte(this.DE(), this.A);
 
-            console.log("LD (DE), A");
             this.PC++;
             return 8;
         } else if (currByte === 0x0C) {
@@ -907,7 +898,6 @@ export class CPU {
             this.C = result[0];
             this.clearFlag(SUBTRACTION_FLAG);
             this.clearFlag(CARRY_FLAG);
-            console.log("INC C");
             this.PC++;
             return 4;
         } else if (currByte === 0xD2) {
@@ -964,8 +954,8 @@ export class CPU {
             // Push present address onto stack. Jump to address $0000 + 56 (0x38).
             // RST 38H
             this.PC++; // push the next address onto the stack
-            this.stackPush(this.PC & 0x00FF);
-            this.stackPush((this.PC & 0xFF00) >> 8);
+            //this.stackPush(this.PC & 0x00FF);
+            //this.stackPush((this.PC >> 8);
             this.PC = 0x38;
             return 16;
         } else if (currByte === 0x3E) {
@@ -1003,7 +993,7 @@ export class CPU {
             let result = wrappingByteSub(this.A, value);
             this.updateZeroFlag(result[0]);
             this.setFlag(SUBTRACTION_FLAG);
-            this.updateHalfCarryFlag(this.A, value);
+            this.updateSubHalfCarryFlag(this.A, value);
             result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
 
             this.PC += 2;
@@ -1049,9 +1039,10 @@ export class CPU {
             const addr = (msb >> 8) & lsb;
 
             // push address after this instruction on to the stack
-            const bytes = this.split16BitValueIntoTwoBytes(this.PC + 3);
-            this.stackPush(bytes[0]);
-            this.stackPush(bytes[1]);                        
+            const returnAddr = this.PC + 3; // 3 because this instruction is 3 bytes long
+            const [higherByte, lowerByte] = this.split16BitValueIntoTwoBytes(returnAddr);
+            this.stackPush(higherByte);
+            this.stackPush(lowerByte);                        
 
             this.PC = addr;
             return 24;
@@ -1099,11 +1090,12 @@ export class CPU {
     }
 
     // Useful for when pushing 16-bit values on to a stack
+    // @param value -> a 16-bit value that is split into two bytes
     // @return twoBytes number[] -> splits single 16 bit value into an array of two bytes.
-    private split16BitValueIntoTwoBytes(a16: number): number[] {
-        const firstByte = this.PC & 0x00FF;
-        const secondByte = (this.PC & 0xFF00) >> 8;
-        return [firstByte, secondByte];
+    private split16BitValueIntoTwoBytes(value: number): number[] {
+        const lowerByte = value & 0x00FF;
+        const higherByte = value >> 8;
+        return [higherByte, lowerByte];
     }
 
     private stackPush(value: number) {
@@ -1126,8 +1118,17 @@ export class CPU {
         }
     }
 
-    private updateHalfCarryFlag(value1: number, value2: number) {
-        if ((value1 & 0xF) + (value2 & 0xF) > 0xF) {
+    private updateSubHalfCarryFlag(a: number, b: number) {
+        if ((((a & 0xF) - (b & 0xF)) & 0x10) === 0x10) {
+            this.setFlag(HALF_CARRY_FLAG);
+        } else {
+            this.clearFlag(HALF_CARRY_FLAG);
+        }
+    }
+
+    private updateHalfCarryFlag(a: number, b: number) {
+        // (((a & 0xf) + (b & 0xf)) & 0x10) == 0x10
+        if ((((a & 0xF) + (b & 0xF)) & 0x10) === 0x10) {
             this.setFlag(HALF_CARRY_FLAG);
         } else {
             this.clearFlag(HALF_CARRY_FLAG);
@@ -1194,20 +1195,17 @@ export class Gameboy {
 
     let keepRunning = true;
     while (keepRunning) {
-      // process interrupts
-      if (this.processInterrupts()) {
-          // interrupt was invoked. So do nothing else and start executing the interrupt on next step
-          console.log("ERROR INTERRUPTS ARE NOT IMPLEMENTED YET");
-          continue;
-      }
-  
-      const disassembled = this.cpu.disassembleNextInstruction();
+      const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
       const shouldShowDebugger = this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered();
-      if (shouldShowDebugger) {
+      if (shouldShowDebugger && this.inDebugMode) {
           // Asterisk indicates this is the current instruction (hasn't been executed yet)
           process.stdout.write("* ");
       }
-      console.log(disassembled);
+
+      if (this.inDebugMode) {
+          console.log(disassembled);
+      }
+
       if (shouldShowDebugger) {
         // suspend execution until a key is pressed
         this.debugger.showConsole();
@@ -1219,8 +1217,15 @@ export class Gameboy {
           keepRunning = false;
           continue;
       }
-
       this.cyclesCounter += cycles;
+
+      // process interrupts
+      if (this.processInterrupts()) {
+        // interrupt was invoked. Do nothing else and start executing the interrupt immediately
+        continue;
+      }
+
+
       this.ppu.step(this.cyclesCounter);
     }
 

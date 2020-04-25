@@ -84,6 +84,10 @@ export class AddressValueChangeBreakpoint {
     public hasTriggered(gb: Gameboy): boolean {
         return false;
     }
+
+    public toString() {
+        return `<AddressValueChangeBreakpoint addr=${this.address}>`;
+    }
 }
 
 // trigger whenever the value at specified address RANGE has changed
