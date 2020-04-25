@@ -1,17 +1,8 @@
 import { multiDimRepeat } from './utils';
 import { MemoryBus, Interrupt } from './emulator';
 
-/*class Screen {
-    private buffer: number[][];
-
-    constructor() {
-        this.buffer = 
-    }
-}*/
-
 const GB_SCREEN_WIDTH_IN_PX = 160;
 const GB_SCREEN_HEIGHT_IN_PX = 144;
-
 export enum Address {
     VRAM_ADDR_BEGIN = 0x8000,
     VRAM_ADDR_END = 0x9fff,

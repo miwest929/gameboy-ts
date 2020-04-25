@@ -157,7 +157,6 @@ export class MemoryBus {
         // TODO: Implement Echo Ram 0xE000 - 0xFDFF. It's a mirror of WRAM addr 0xC000 - 0xDDFF
         //       Typically not used. Writing to an echo address causes a write to that AND write to associated address in WRAM.
         //       And vice versa.
-
         if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
             // if writing to memory mapped vram
             this.ppu.writeToVRAM(addr - Address.VRAM_ADDR_BEGIN, value);
@@ -180,7 +179,7 @@ export class MemoryBus {
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             console.warn("I/O Registers aren't supported yet");
-        } else if (addr < 0xFEA0 && addr > 0xFEFF) { // addr between FEA0 and FEFF are unused. Writing to them should be ignored
+        } else if (addr < 0xFEA0 || addr > 0xFEFF) { // addr between FEA0 and FEFF are unused. Writing to them should be ignored
             this.memory.write(addr, value);
         }
     }
@@ -365,6 +364,16 @@ export class CPU {
 
     public DE(): number {
         return (this.D << 8) | this.E;
+    }
+
+    public BC(): number {
+        return (this.B << 8) | this.C;
+    }
+
+    public decrementBC() {
+        const result = wrappingTwoByteSub(((this.B << 8) | this.C), 1);
+        this.B = result[0] >> 8;
+        this.C = result[0] & 0x00FF;
     }
 
     public getFlag(flag: number): boolean {
@@ -653,6 +662,12 @@ export class CPU {
         } else if (currByte === 0xFB) {
             this.lastExecutedOpCode = 0xFB;
             return 'EI';
+        } else if (currByte === 0x0B) {
+            this.lastExecutedOpCode = 0x0B;
+            return 'DEC BC';
+        } else if (currByte === 0xB1) {
+            this.lastExecutedOpCode = 0xB1;
+            return 'OR C';
         }
     }
 
@@ -812,6 +827,11 @@ export class CPU {
             // Logical OR register B with register A, result in A.
             // OR B
             this.A = this.A | this.B
+            this.updateZeroFlag(this.A);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.clearFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);
+
             this.PC++;
             return 4;
         } else if (currByte === 0x14) {
@@ -1031,10 +1051,18 @@ export class CPU {
             // push address after this instruction on to the stack
             const returnAddr = this.PC + 3; // 3 because this instruction is 3 bytes long
             const [higherByte, lowerByte] = this.split16BitValueIntoTwoBytes(returnAddr);
-            this.stackPush(higherByte);
-            this.stackPush(lowerByte);                        
 
-            this.PC = addr;
+            // TODO: In Tetris this is an invalid jump. BGB emulator doesn't execute the CALL for some reason
+            //       Need to figure out why.
+            //if (addr !== 0x2795) {
+                console.log(`high=${higherByte}, low=${lowerByte}, addr=${addr}`);
+              this.stackPush(higherByte);
+              this.stackPush(lowerByte);  
+              this.PC = addr;                      
+            //} else {
+            //    this.PC += 3;
+            //  }
+        
             return 24;
         } else if (currByte === 0x01) {
             // LD BC, d16
@@ -1050,8 +1078,8 @@ export class CPU {
             // pop two bytes from the stack and jump to that address
             // then globally enable interrupts
             // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
-            const msb = this.stackPop();
             const lsb = this.stackPop();
+            const msb = this.stackPop();
             const addr = (msb << 8) | lsb;
 
             this.IME = 0x01; // globally enable interrupts
@@ -1061,9 +1089,10 @@ export class CPU {
             // RET
             // Pop two bytes from stack & jump to that address.
             // TODO: Verify that popping two bytes from stack works like this. Use other emulators as implementation reference
-            const msb = this.stackPop();
             const lsb = this.stackPop();
+            const msb = this.stackPop();
             const addr = (msb << 8) | lsb;
+            console.log(`msb = ${msb}, lsb = ${lsb}, addr = ${addr}`);
             this.PC = addr;
 
             return 16;
@@ -1072,6 +1101,22 @@ export class CPU {
             this.IME = 0x01;
             this.PC++;
 
+            return 4;
+        } else if (currByte === 0x0B) {
+            // DEC BC
+            this.decrementBC();
+            this.PC++;
+            return 8;
+        } else if (currByte === 0xB1) {
+            // OR C
+
+            this.A = this.A | this.C
+            this.updateZeroFlag(this.A);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.clearFlag(HALF_CARRY_FLAG);
+            this.clearFlag(CARRY_FLAG);
+
+            this.PC++;
             return 4;
         }
 
