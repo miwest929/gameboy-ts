@@ -1685,20 +1685,14 @@ export class Cartridge {
     public romBytes: Uint8Array;
     public romName: string;
     public isLoaded: boolean;
-    public fromLocalFileSystem: boolean;
 
-    constructor(name: string, fromLocalFileSystem: boolean = false) {
+    constructor(name: string) {
         this.romName = name;
         this.isLoaded = true;
-        this.fromLocalFileSystem = fromLocalFileSystem;
     }
 
     public async load() {
-        if (this.fromLocalFileSystem) {
-            this.romBytes = loadRomFromFileSystem(this.romName);
-        } else {
-           this.romBytes = await loadRom('tetris');
-        }
+        this.romBytes = loadRomFromFileSystem(this.romName);
         this.isLoaded = true;
     }
 
