@@ -3,7 +3,10 @@ FEATURES
 2. Implement interrupts
 
 BUGS
-- Zero flag is not updated correctly for all cases
-- IF register is not being updated correctly
 - LY increases too quickly (repo: breakpoint at 0x022F. bgb has LY=0x3E, mine has LY=0x92
 - "OAM Search found these 10 visible objects:" log displayed when it shouldn't have
+- STAT register isn't updated correctly.
+
+- *** ACTUALLY WORKS **** IF register is not being updated correctly
+  Repo: Set addr bp to 0x027B. IF should be 0xE1
+  -- The upper nibble are all unused. So the used part is correct..

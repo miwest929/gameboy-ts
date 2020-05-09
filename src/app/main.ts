@@ -83,12 +83,17 @@ class EmulatorApplication {
     const layout = new FlexLayout();
     center.setLayout(layout);
     this.window.resize(width, height);
+    this.window.setWindowTitle("Gameboy Emulator");
   }
 }
 
-const screen = new GameboyScreen();
-const app = new EmulatorApplication(640, 480);
-app.attachScreenRender(screen);
-console.log('-------------------------------------------------------------')
-console.log("Starting the Application");
-app.start();
+async function run() {
+  const screen = new GameboyScreen();
+  const app = new EmulatorApplication(640, 480);
+  app.attachScreenRender(screen);
+  console.log('-------------------------------------------------------------')
+  console.log("Starting the Gameboy Emulator...");
+  app.start();
+}
+
+run();
