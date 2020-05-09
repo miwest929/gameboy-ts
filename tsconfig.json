@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
-    "lib": ["es2016", "dom"],
+    "incremental": true,
+    "target": "es2016",
     "module": "CommonJS",
-    "outDir": "src/js",
+    "outDir": "./dist",
+    "moduleResolution": "node",
+    "esModuleInterop": true
   },
   "include": ["src/app"]
 }
