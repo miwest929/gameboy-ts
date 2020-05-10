@@ -10,7 +10,7 @@ function getCommandLineArguments(): any[] {
       console.log(`Usage: ts-node src/app/gameboy.ts <path-to-rom> [debug]`);
       return null;
     }
-
+    
     return [args[0], args[1] === 'debug' ? true : false];
 }
 
@@ -21,8 +21,6 @@ async function execute() {
   }
 
   const gameboy = new Gameboy(debugMode);
-  //gameboy.addBreakpoint(0x0003);
-
   const cart = new Cartridge(romFilename); // second arg is for fromLocalFileSystem
   await gameboy.loadCartridge(cart);
 

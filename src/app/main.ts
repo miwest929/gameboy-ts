@@ -1,5 +1,6 @@
 import { FlexLayout, QColor, WidgetEventTypes, QMainWindow, QPainter, QPoint, QWidget } from '@nodegui/nodegui';
 import { multiDimRepeat } from './utils';
+import * as child from 'child_process';
 
 enum ScreenColor {
   BLACK = 0x00,
@@ -57,6 +58,7 @@ class GameboyScreen {
 
 class EmulatorApplication {
   private window: QMainWindow;
+  private emulatorBackend: any;
 
   constructor(width: number, height: number) {
     this.window = new QMainWindow();
@@ -67,6 +69,8 @@ class EmulatorApplication {
     if (!this.window) {
       throw new Error("QMainWindow instance is not initialized");
     }
+
+    this.emulatorBackend = this.launchEmulatorBackend();
 
     this.window.show();
     (global as any).win = this.window;
@@ -84,6 +88,31 @@ class EmulatorApplication {
     center.setLayout(layout);
     this.window.resize(width, height);
     this.window.setWindowTitle("Gameboy Emulator");
+  }
+
+  // NOTE:
+  //   FORK will duplicate the process
+  //   SPAWN will create a new process executing new code
+  // spawn a new process that'll run the emu backend
+  private launchEmulatorBackend() {
+    // child processes have a send method for communicating back with the process that spawned them
+    const command = 'npm';
+    const emu = child.spawn(command, ['run', 'emu']);
+    emu.on('error', (err) => {
+      throw new Error(`Failed to start emulator: ${err}`);
+    });
+
+    emu.stdout.on('data', (data) => {
+      console.log(`[EMULATOR] ${data}`);
+    });
+
+    emu.on('close', (code) => {
+      if (code !== 0) {
+        console.log(`emulator exited with exit code ${code}`);
+      }
+    });
+
+    return emu;
   }
 }
 

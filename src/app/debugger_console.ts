@@ -189,6 +189,10 @@ export class DebugConsole {
         `);
     }
 
+    public shouldShowDebugger() {
+        return this.inDebuggerActive() || this.breakpointTriggered();
+    }
+
     public inDebuggerActive() {
         return this.inDebuggerMode;
     }

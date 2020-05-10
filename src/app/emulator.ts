@@ -1,5 +1,5 @@
-import { loadRomFromFileSystem, loadRom } from './rom_loader';
-import { uInt8ArrayToUtf8, sleep, displayAsHex } from './utils';
+import { loadRomFromFileSystem } from './rom_loader';
+import { uInt8ArrayToUtf8, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
 import { DebugConsole } from './debugger_console';
 
@@ -1614,9 +1614,8 @@ export class Gameboy {
     while (keepRunning) {
       const prevProgramCounter = this.cpu.PC;
       const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
-      const shouldShowDebugger = this.debugger.inDebuggerActive() || this.debugger.breakpointTriggered();
 
-      if (shouldShowDebugger) {
+      if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
         // suspend execution until a key is pressed
         console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
         this.debugger.showConsole();
