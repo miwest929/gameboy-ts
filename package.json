@@ -9,8 +9,8 @@
     "startw": "webpack && qode ./dist/main.js",
     "gb": "./node_modules/.bin/qode dist/main.js",
     "start": "tsc --p . --watch",
-    "run:debug": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb debug",
-    "run": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb",
+    "emu:debug": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb debug",
+    "emu": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb",
     "run:server": "http-server src/js --cors -p 8082"
   },
   "dependencies": {
