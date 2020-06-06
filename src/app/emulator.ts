@@ -230,10 +230,10 @@ export class MemoryBus {
     }
 }
 
-export const ZERO_FLAG: number = 0x7F; // set when the instruction results in a value of 0. Otherwise (result different to 0) it is cleared.
-export const SUBTRACTION_FLAG: number = 0xBF; // set when the instruction is a subtraction.  Otherwise (the instruction is an addition) it is cleared.
-export const HALF_CARRY_FLAG: number = 0xDF; // set when a carry from bit 3 is produced in arithmetical instructions.  Otherwise it is cleared.
-export const CARRY_FLAG: number = 0xEF; // set when a carry from bit 7 is produced in arithmetical instructions.  Otherwise it is cleared.
+export const ZERO_FLAG: number = 0x80; // 0x7F; // set when the instruction results in a value of 0. Otherwise (result different to 0) it is cleared.
+export const SUBTRACTION_FLAG: number = 0x40; // 0xBF; // set when the instruction is a subtraction.  Otherwise (the instruction is an addition) it is cleared.
+export const HALF_CARRY_FLAG: number = 0x20; // 0xDF; // set when a carry from bit 3 is produced in arithmetical instructions.  Otherwise it is cleared.
+export const CARRY_FLAG: number = 0x10; // 0xEF; // set when a carry from bit 7 is produced in arithmetical instructions.  Otherwise it is cleared.
 
 // The second boolean return value determines if a carry has occurred.
 // This applies to all wrapping arthmetic functions
@@ -302,14 +302,23 @@ const INITIAL_HL_REG_VALUE = 0x014D;
 // used for delaying disabling interrupts
 const DISABLE_COUNTER_INACTIVE = -1;
 
+type FlagRegister = {
+    subtractionFlag: boolean,
+    carryFlag: boolean,
+    zeroFlag: boolean,
+    halfCarryFlag: boolean,
+}
+
 export class CPU {
 	// registers (unless specified all registers are assumed to be 1 byte)
 	A: number;
 	B: number;
 	C: number;
 	D: number;
-	E: number; 
+    E: number; 
+    
     F: number; // flags register
+    Flags: FlagRegister;
 
 	//H: number;
     //L: number;
@@ -339,7 +348,13 @@ export class CPU {
         this.HL = INITIAL_HL_REG_VALUE;
 
         // NOTE: According to BGB Debugger. This register is initialized to 0xB0 (eg: zero, hc, and carry flags on)
-        this.F = INITIAL_F_REG_VALUE;
+        this.F = INITIAL_F_REG_VALUE; // 0x80 = 0x1000xxxx
+        this.Flags = {
+            zeroFlag: true,
+            subtractionFlag: false,
+            halfCarryFlag: false,
+            carryFlag: false
+        }
 
         this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // -1 means to ignore this counter
     }
@@ -400,23 +415,44 @@ export class CPU {
     }
 
     public getFlag(flag: number): boolean {
-        let flagValue = this.F & ~flag;
-        while (flagValue > 1) {
-            flagValue >>= 1;
+        if (flag === SUBTRACTION_FLAG) {
+            return this.Flags.subtractionFlag;
+        } else if (flag === ZERO_FLAG) {
+            return this.Flags.zeroFlag;
+        } else if (flag === HALF_CARRY_FLAG) {
+            return this.Flags.halfCarryFlag;
+        } else if (flag === CARRY_FLAG) {
+            return this.Flags.carryFlag;
         }
-
-        return flagValue === 1;
     }
 
     public clearFlag(flag: number) {
-      this.F = this.F & flag;
+        if (flag === SUBTRACTION_FLAG) {
+            this.Flags.subtractionFlag = false;
+        } else if (flag === ZERO_FLAG) {
+            this.Flags.zeroFlag = false;
+        } else if (flag === HALF_CARRY_FLAG) {
+            this.Flags.halfCarryFlag = false;
+        } else if (flag === CARRY_FLAG) {
+            this.Flags.carryFlag = false;
+        }
+        // this.F = this.F & flag;
     }
 
     public setFlag(flag: number) {
-        console.log(`[set ${displayAsHex(flag)} flag] Before flags = ${displayAsHex(this.F)}`);
-        this.F = this.F | ~flag;
-        console.log(`[set ${displayAsHex(flag)} flag] After flags = ${displayAsHex(this.F)}`);
-        console.log(`[set ${displayAsHex(flag)} flag] is flag actually set? ${this.getFlag(flag) === true}`)
+        if (flag === SUBTRACTION_FLAG) {
+            this.Flags.subtractionFlag = true;
+        } else if (flag === ZERO_FLAG) {
+            this.Flags.zeroFlag = true;
+        } else if (flag === HALF_CARRY_FLAG) {
+            this.Flags.halfCarryFlag = true;
+        } else if (flag === CARRY_FLAG) {
+            this.Flags.carryFlag = true;
+        }
+        //console.log(`[set ${displayAsHex(flag)} flag] Before flags = ${displayAsHex(this.F)}`);
+        //this.F = this.F | ~flag;
+        //console.log(`[set ${displayAsHex(flag)} flag] After flags = ${displayAsHex(this.F)}`);
+        //console.log(`[set ${displayAsHex(flag)} flag] is flag actually set? ${this.getFlag(flag) === true}`)
     }
 
     public shouldDisableInterrupts() {
