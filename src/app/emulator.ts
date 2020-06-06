@@ -1,6 +1,7 @@
 import { loadRomFromFileSystem } from './rom_loader';
 import { uInt8ArrayToUtf8, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
+import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
 
 /*
@@ -146,11 +147,13 @@ export class MemoryBus {
     private memory: Memory;
     private ppu: PPU;
     private cpu: CPU;
+    public cartridge: Cartridge;
 
     constructor(memory: Memory, ppu: PPU, cpu: CPU) {
         this.memory = memory;
         this.ppu = ppu;
         this.cpu = cpu;
+        this.cartridge = null;
     }
 
     public writeByte(addr: number, value: number) {
@@ -177,16 +180,23 @@ export class MemoryBus {
             this.performDMAOAMTransfer(value);
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
+        } else if (addr === 0xFF01) {
+            console.log(`OUT: ${String.fromCharCode(value)}`);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             console.warn("I/O Registers aren't supported yet");
+        } else if (addr >= 0x0000 && addr <= 0x7FFF) {  
+            this.cartridge.mbc.WriteByte(addr, value);
         } else if (addr < 0xFEA0 || addr > 0xFEFF) { // addr between FEA0 and FEFF are unused. Writing to them should be ignored
             this.memory.write(addr, value);
+        } else {
+            console.log(`Writing to addr ${displayAsHex(addr)} isn't supported`);
         }
     }
 
     public readByte(addr: number): number {
         if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
-            return this.ppu.readFromVRAM(addr - Address.VRAM_ADDR_BEGIN);
+
+            return this.memory.read(addr); // this.ppu.readFromVRAM(addr - Address.VRAM_ADDR_BEGIN);
         } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
             return this.ppu.readFromOAM(addr - Address.OAM_ADDR_BEGIN);
         } else if (addr >= 0xff40 && addr <= 0xff4a) {
@@ -199,6 +209,8 @@ export class MemoryBus {
             return this.cpu.IE.RawValue;
         } else if (addr >= 0xFEA0 && addr <= 0xFEFF) { // reading from unused memory should return 0x00
             return 0x00;
+        } else if (addr >= 0x0000 && addr <= 0x7FFF) {
+            return this.cartridge.mbc.ReadByte(addr);
         } else {
             return this.memory.read(addr);
         }
@@ -210,7 +222,7 @@ export class MemoryBus {
 
     private performDMAOAMTransfer(baseSrcAddr: number) {
         const srcAddrStart: number = (baseSrcAddr << 8) | 0x00;
-        console.log(`Performing DMA OAM Transfer from addr ${srcAddrStart} - ${srcAddrStart + 0x9F} to oam addr ${0xFE00} - ${0xFE9F}`);
+        //console.log(`Performing DMA OAM Transfer from addr ${srcAddrStart} - ${srcAddrStart + 0x9F} to oam addr ${0xFE00} - ${0xFE9F}`);
         for (let offsetAddr = 0x00; offsetAddr <= 0x9F; offsetAddr++) {
             const value = this.memory.read(srcAddrStart + offsetAddr);
             this.ppu.writeToOAM(0xFE00 + offsetAddr, value);
@@ -289,6 +301,7 @@ const INITIAL_HL_REG_VALUE = 0x014D;
 
 // used for delaying disabling interrupts
 const DISABLE_COUNTER_INACTIVE = -1;
+
 export class CPU {
 	// registers (unless specified all registers are assumed to be 1 byte)
 	A: number;
@@ -296,7 +309,8 @@ export class CPU {
 	C: number;
 	D: number;
 	E: number; 
-	F: number; // flags register
+    F: number; // flags register
+
 	//H: number;
     //L: number;
     HL: number; // 2 bytes
@@ -399,7 +413,10 @@ export class CPU {
     }
 
     public setFlag(flag: number) {
+        console.log(`[set ${displayAsHex(flag)} flag] Before flags = ${displayAsHex(this.F)}`);
         this.F = this.F | ~flag;
+        console.log(`[set ${displayAsHex(flag)} flag] After flags = ${displayAsHex(this.F)}`);
+        console.log(`[set ${displayAsHex(flag)} flag] is flag actually set? ${this.getFlag(flag) === true}`)
     }
 
     public shouldDisableInterrupts() {
@@ -1190,7 +1207,6 @@ export class CPU {
             const lsb = this.stackPop();
             const msb = this.stackPop();
             const addr = (msb << 8) | lsb;
-            console.log(`msb = ${msb}, lsb = ${lsb}, addr = ${addr}`);
             this.PC = addr;
 
             return 16;
@@ -1570,7 +1586,7 @@ export class Gameboy {
   private inDebugMode: boolean;
   private debugger: DebugConsole;
 
-  constructor(inDebugMode) {
+  constructor(inDebugMode = false) {
     this.memory = new Memory();
     this.ppu = new PPU();
     this.cpu = new CPU();
@@ -1580,6 +1596,8 @@ export class Gameboy {
 
     this.inDebugMode = inDebugMode;
     this.debugger = new DebugConsole(this);
+
+    //this.sharedStream = fs.createWriteStream('backend.emu.stream');
   }
 
   public powerOn() {
@@ -1587,7 +1605,7 @@ export class Gameboy {
           throw new Error('Error powering on the GameBoy due to the cartridge not being loaded yet.');
       }
 
-      if (this.cartridge.getRomHeaderInfo().cartridgeType !== 0x00) {
+      if (!this.cartridge.mbc) { // this.cartridge.getRomHeaderInfo().cartridgeType !== 0x00) {
           throw new Error('Error: MBC banking is not yet supported and the rom does require MBC banking');
       }
 
@@ -1597,23 +1615,53 @@ export class Gameboy {
 
       // initialize the CPU
       this.cpu.initAfterRomLoaded();
-  }
 
-  public getScreenBuffer() {
-    return this.ppu.getScreenBufferData();
+      this.cyclesCounter = 0;
   }
 
   public processInterrupts(): boolean {
       return this.cpu.processInterrupts();
   }
 
-  public async executeRom() {
-    this.cyclesCounter = 0;
+  public async executeNextTick() {
+      console.log("next tick");
+    const prevProgramCounter = this.cpu.PC;
+    const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
 
+    if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
+      // suspend execution until a key is pressed
+      console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
+      this.debugger.showConsole();
+    }
+
+    // ExecuteNextInstruction will modify the PC register appropriately
+    const cycles = this.cpu.executeInstruction();
+    if (cycles === 0) {
+        return;
+    }
+    this.cyclesCounter += cycles;
+
+    // process interrupts
+    if (this.processInterrupts()) {
+      // interrupt was invoked. Do nothing else and start executing the interrupt immediately
+      return;
+    }
+
+    this.ppu.step(this.cyclesCounter);
+
+    // check if V Blank Interrupt was requested
+    if (this.processInterrupts()) {
+      // interrupt was invoked. Do nothing else and start executing the interrupt immediately
+      return;
+    }    
+  }
+
+  public async executeRom() {
     let keepRunning = true;
     while (keepRunning) {
       const prevProgramCounter = this.cpu.PC;
       const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
+      console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
 
       if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
         // suspend execution until a key is pressed
@@ -1628,6 +1676,7 @@ export class Gameboy {
           continue;
       }
       this.cyclesCounter += cycles;
+      //cyclesSinceScreenRefresh += cycles;
 
       // process interrupts
       if (this.processInterrupts()) {
@@ -1635,8 +1684,20 @@ export class Gameboy {
         continue;
       }
 
-
+      //this.streamUpdates();
       this.ppu.step(this.cyclesCounter);
+
+      //if (cyclesSinceScreenRefresh > 5000 && process.send) {
+      //  process.send(this.ppu.getScreenData());
+       // cyclesSinceScreenRefresh = 0;
+    //}
+
+
+      // check if V Blank Interrupt was requested
+      if (this.processInterrupts()) {
+        // interrupt was invoked. Do nothing else and start executing the interrupt immediately
+        continue;
+      }
     }
 
     console.log('CPU stopped executing. Most likely due to executing instruction error');
@@ -1649,6 +1710,7 @@ export class Gameboy {
   public async loadCartridge(cart: Cartridge) {
       this.cartridge = cart;
       await this.cartridge.load();
+      this.bus.cartridge = this.cartridge;
 
       // load bank 0 into Gameboy's ram (0x0000 - 0x3FFF)(16K bytes)
       this.loadRomDataIntoMemory(0x0000, 0x0000, ROM_BANK_END_ADDR);
@@ -1684,6 +1746,7 @@ export class Cartridge {
     public romBytes: Uint8Array;
     public romName: string;
     public isLoaded: boolean;
+    public mbc: MemoryBankController;
 
     constructor(name: string) {
         this.romName = name;
@@ -1692,7 +1755,43 @@ export class Cartridge {
 
     public async load() {
         this.romBytes = loadRomFromFileSystem(this.romName);
+        this.initMBC();
         this.isLoaded = true;
+    }
+
+    public initMBC() {
+        const romHeader = this.getRomHeaderInfo();
+        if (romHeader.cartridgeType === 0x00) { // MBC0
+          this.mbc = new MBC0(
+              this.romBytes,
+              this.getROMSize(romHeader.romSize)
+          )
+        } else if (romHeader.cartridgeType === 0x01) { // MBC1
+          this.mbc = new MBC1(
+              this.romBytes,
+              this.getROMSize(romHeader.romSize)
+          );
+        } else {
+            // MBC not supported
+            console.log(`ERROR: MBC of type ${romHeader.cartridgeType} is not currently supported`);
+            this.mbc = null;
+        }
+
+    }
+
+    public getROMSize(romSizeHeaderValue) {
+        switch (romSizeHeaderValue) {
+            case 0x00: return 32768;
+            case 0x01: return 65536;
+            case 0x02: return 131072;
+            case 0x03: return 262144;
+            case 0x04: return 524288;
+            case 0x05: return 1104280; // is this exact number?
+            default: {
+                console.log("ERROR: ROM size is currently not supported");
+                return 0;
+            }
+        }
     }
 
     public getRomHeaderInfo(): IRomHeader {

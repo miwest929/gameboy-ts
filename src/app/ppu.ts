@@ -121,12 +121,12 @@ export class LCDC {
         return (this.RawValue & 0x80) === 0x80;
     }
 
-    // @return number[] -> beginAddress and endAddress of the window tile map. Returned as two-element array
-    public windowTileMapDisplayAddr(): number[] { // bit 6
+    // @return number -> beginAddress  of the window tile map
+    public windowTileMapDisplayAddr(): number { // bit 6
         if ((this.RawValue & 0x40) === 0x40) { // flag is on
-            return [0x9C00, 0x9FFF];
+            return 0x9C00; // endAddr = 0x9FFF
         } else {
-            return [0x9800, 0x9BFF];
+            return 0x9800; // endAddr = 0x9BFF
         }
     }
 
@@ -134,19 +134,20 @@ export class LCDC {
         return (this.RawValue & 0x20) === 0x20;
     }
 
-    public backgroundAndWindowTileAddr(): number[] { // bit 4
+    public backgroundAndWindowTileAddr(): number { // bit 4
         if ((this.RawValue & 0x10) === 0x10) { // flag is on
-            return [0x8000, 0x8FFF];
+            return 0x8000; // endAddr = 0x8FFF
         } else {
-            return [0x8800, 0x97FF];
+            return 0x8800; // endAddr = 0x97FF
         }
     }
 
-    public backgroundTileMapDisplayAddr(): number[] { // bit 3
+    // just returns the start address since block length is constant
+    public backgroundTileMapDisplayAddr(): number { // bit 3
         if ((this.RawValue & 0x08) === 0x08) { // flag is on
-            return [0x9C00, 0x9FFF];
+            return 0x9C00; // endAddr = 0x9FFF
         } else {
-            return [0x9800, 0x9BFF];
+            return 0x9800; // endAddr = 0x9BFF
         }
     }
 
@@ -313,13 +314,14 @@ const ACCESSING_VRAM_CYCLES = 172;
 // The V-Blank interrupt occurs ca. 59.7 times a second on a handheld Game Boy. This interrupt occurs at the beginning of the V-Blank period (LY=144)
 export class PPU {
     public buffer: number[][];
+    public pixels: number[][]; // TODO: full 256x256 pixel data. Later, use (SCX, SCY) to create the actual 160x144 display.
+                               //       Update to map directly to 160x144 resolution instead of using 256x256 as intermediary
 
     /*
       This memory contains OBJ Tiles (4KB), BG Tiles (4KB), BG Map (1KB), Window Map (1KB) 
       The LCDC register determines how vram is allocated to the 4 sections.
     */
     private vram: Uint8Array;
-
 
     public oam: Uint8Array;
 
@@ -341,6 +343,10 @@ export class PPU {
 
     constructor() {
         this.buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
+
+        // TODO: Temp pixel data
+        this.pixels = multiDimRepeat<number>(0, 256, 256);
+
         this.vram = new Uint8Array(VRAM_SIZE_BYTES);
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
         this.clock = 0x00;
@@ -357,14 +363,6 @@ export class PPU {
 
     public setMemoryBus(bus: MemoryBus) {
         this.bus = bus;
-    }
-
-    public getScreenBufferData(): IScreenBuffer {
-        return {
-            widthInPx: GB_SCREEN_WIDTH_IN_PX,
-            heightInPx: GB_SCREEN_HEIGHT_IN_PX,
-            data: this.buffer
-        };
     }
 
     public writeSpecialRegister(addr: number, value: number) {
@@ -425,6 +423,18 @@ export class PPU {
         }
     }
 
+    public getScreenData() {
+        const buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
+        for (let i = 0; i < GB_SCREEN_HEIGHT_IN_PX; i++) {
+            for (let j = 0; j < GB_SCREEN_WIDTH_IN_PX; j++) {
+                const wrappedY = (i + this.SCROLL_Y) % 256;
+                const wrappedX = (i + this.SCROLL_X) % 256;
+                buffer[i][j] = this.pixels[wrappedY][wrappedX];
+            }
+        }
+        return buffer;
+    }
+
     public step(cycles: number) {
       if (!this.LCDC_REGISTER.isDisplayOn()) {
 		this.LY = 0;
@@ -450,7 +460,7 @@ export class PPU {
 
         // perform OAM Search
         const visibleObjects = this.performOAMSearch(this.LY);
-        console.log(`OAM Search found these 10 visible objects: ${visibleObjects.join(', ')}`);
+        //console.log(`OAM Search found these 10 visible objects: ${visibleObjects.join(', ')}`);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
       } else {
@@ -464,14 +474,23 @@ export class PPU {
 
           if (this.LY === 144) {
             // request VBLANK interrupt to occu
+            this.LCDC_STATUS.updateModeFlag(LCDC_MODES.VBlankPeriod);
             this.bus.RequestInterrupt(Interrupt.VBLANK);
           } else if (this.LY > 153) {
-              this.LY = 0;
+            this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
+            this.LY = 0;
           }
 
 		  // Render scanline
 		  if (this.LY < 144) {
+            this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
+              /*
+                To simplify rendering we'll first render to the full 256x256 display
+                During LCD rendering is when we'll actually take SCX, SCY into account
+              */
               // render background scan line
+              this.renderBackgroundScanline();
+
               // render window scan line
 
               // render sprite (object) scan line
@@ -497,6 +516,73 @@ export class PPU {
 
     public readFromVRAM(addr: number) {
         return this.vram[addr];
+    }
+
+    // Tiles are stored in two regions:
+    //   Tiles are stored in $8000-97FF
+    //   $8000-8FFF (sprites, bg, window display) tileId >= 0 and <= 255.
+    //   $8800-97FF (background, window display) tileId between -128 and 127
+    // Each tile (8x8) consumes 16 bytes (64 pixels at 2 bits/pixels)
+    // Layout:
+    //   Byte 0-1  First Line (Upper 8 pixels)
+    //   Byte 2-3  Next Line
+    // @return number[] -> 8 pixel colors for the correct line in the tile
+    private readScanlineFromTileData(tileId: number, lineOffset: number) {
+      const baseTileAddr = 0x8000 + (tileId * 16);
+      const baseTileDataAddr = baseTileAddr + lineOffset * 2;
+      const lsbPixels = this.bus.readByte(baseTileDataAddr);
+      const msbPixels = this.bus.readByte(baseTileDataAddr + 1);
+
+      // 8 bits
+      let pixel0 = ((msbPixels & 0x80) >> 6) | ((lsbPixels & 0x80) >> 7);
+      let pixel1 = ((msbPixels & 0x40) >> 6) | ((lsbPixels & 0x40) >> 7);
+      let pixel2 = ((msbPixels & 0x20) >> 6) | ((lsbPixels & 0x20) >> 7);
+      let pixel3 = ((msbPixels & 0x10) >> 6) | ((lsbPixels & 0x10) >> 7);
+      let pixel4 = ((msbPixels & 0x08) >> 6) | ((lsbPixels & 0x08) >> 7);
+      let pixel5 = ((msbPixels & 0x04) >> 6) | ((lsbPixels & 0x04) >> 7);
+      let pixel6 = ((msbPixels & 0x02) >> 6) | ((lsbPixels & 0x02) >> 7);
+      let pixel7 = ((msbPixels & 0x01) >> 6) | ((lsbPixels & 0x01) >> 7);
+
+      return [pixel0, pixel1, pixel2, pixel3, pixel4, pixel5, pixel6, pixel7];
+    }
+
+    private renderScanline(tileMapStartAddr: number, lineOffset: number) {
+      //console.log(`rendering scanline ${this.LY}`);
+      for (let tOffset = 0; tOffset < 32; tOffset++) {
+          const tileIdAddr = tileMapStartAddr + tOffset;
+          const tileId = this.readFromVRAM(tileIdAddr - Address.VRAM_ADDR_BEGIN);
+          const scanlinePixels = this.readScanlineFromTileData(tileId, lineOffset); // array of 8 pixels
+
+          // "render" pixels in tileScanlineData
+          // by "render" we write to this.pixels array
+          //console.log(scanlinePixels);
+          for (let i = 0; i < 8; i++) {
+            this.pixels[this.LY][tOffset * 8 + i] = scanlinePixels[i];
+          }
+      }      
+      // pixels[x][y] = color
+      // entire scanline has been "rendered"
+    }
+
+    /*
+       Tile Maps have 32 chunks where each is 32 bytes long
+       Each byte is a tileId. Since each actual tile is 8x8 each tileId spans 8 scanlines
+    */
+    private renderBackgroundScanline() {
+        // SCROLLX -> x position in the 256x256 pixels BG map 
+        const bgTileMapAddr = this.LCDC_REGISTER.backgroundTileMapDisplayAddr();
+        // this.LY is the scanline
+        // this.LY + this.SCROLL_Y
+        // const adjustedScreenY = this.LY + this.SCROLL_Y;
+
+        // Every scanline begins with X = 0
+        // The base address 
+        const tileMapAddr = bgTileMapAddr + (this.LY / 8) * 32; // bgTileMapAddr + adjustedScreenY;
+        const lineOffset = this.LY % 8; // TODO: Verify this computation
+
+        //const initialTileX = this.SCROLL_X % 8;
+        //const initialTileY = adjustedScreenY % 8;
+        this.renderScanline(tileMapAddr, lineOffset);
     }
 
     // @param ly: number : the current scanline

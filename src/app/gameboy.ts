@@ -27,7 +27,8 @@ async function execute() {
   console.log(cart.getRomHeaderInfo());
   console.log('Powered on. Executing rom program');
   gameboy.powerOn();
-  gameboy.executeRom();
+
+  gameboy.executeRom(); // TODO: Better interface is to pass the Cartridge instance to this function....
 }
 
 execute();
