@@ -112,9 +112,12 @@ export class DebugConsole {
     // When true the debugger repl will display after each instruction execution
     private inDebuggerMode = false;
 
+    private pastAddresses: number[];
+
     constructor(gb: Gameboy) {
         this.gameboy = gb;
         this.breakpoints = loadBreakpoints("./breakpoints");
+        this.pastAddresses = [0x100]; // 0x100 is the address start executing..
     }
 
     public breakpointTriggered() {
@@ -134,6 +137,7 @@ export class DebugConsole {
         WINDOWX = ${displayAsHex(this.gameboy.ppu.WINDOWX)} (${this.gameboy.ppu.WINDOWX})
         WINDOWY = ${displayAsHex(this.gameboy.ppu.WINDOWY)} (${this.gameboy.ppu.WINDOWY})
         ========================================================
+        STAT = ${displayAsHex(this.gameboy.ppu.LCDC_STATUS.RawValue)}
         LCDC = ${displayAsHex(this.gameboy.ppu.LCDC_REGISTER.RawValue)}
         isDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isDisplayOn()}
         isWindowDisplayOn = ${this.gameboy.ppu.LCDC_REGISTER.isWindowDisplayOn()}
@@ -193,6 +197,14 @@ export class DebugConsole {
         return this.inDebuggerActive() || this.breakpointTriggered();
     }
 
+    public pushCallAddress(callAddr: number) {
+        this.pastAddresses.push(callAddr);
+    }
+
+    public popCallAddress() {
+        this.pastAddresses.pop();
+    }
+
     public inDebuggerActive() {
         return this.inDebuggerMode;
     }
@@ -228,6 +240,10 @@ export class DebugConsole {
                 const addr = parseInt(args[0], 16);
                 this.breakpoints.push(new AddressBreakpoint(addr));
                 console.log(`Set new breakpoint at address 0x${displayAsHex(addr)}`);
+            } else if (command === "trace") {
+                // Display list of call addresses. Every time a call happens its address will be traced
+                const formattedAddrs = this.pastAddresses.map((a) => displayAsHex(a));
+                console.log(`Address call stack: ${formattedAddrs.join(', ')}`);
             }
         }
     } 
