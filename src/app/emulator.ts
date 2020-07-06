@@ -162,6 +162,7 @@ export class MemoryBus {
         //       And vice versa.
         if (addr >= Address.VRAM_ADDR_BEGIN && addr <= Address.VRAM_ADDR_END) {
             // if writing to memory mapped vram
+            this.memory.write(addr, value);
             this.ppu.writeToVRAM(addr - Address.VRAM_ADDR_BEGIN, value);
         } else if (addr >= Address.OAM_ADDR_BEGIN && addr <= Address.OAM_ADDR_END) {
             this.ppu.writeToOAM(addr - Address.OAM_ADDR_BEGIN, value);
@@ -300,7 +301,7 @@ const INITIAL_E_REG_VALUE = 0xD8;
 const INITIAL_HL_REG_VALUE = 0x014D;
 
 // used for delaying disabling interrupts
-const DISABLE_COUNTER_INACTIVE = -1;
+const INTERRUPT_DELAY_COUNTER_INACTIVE = -1;
 
 type FlagRegister = {
     subtractionFlag: boolean,
@@ -329,8 +330,11 @@ export class CPU {
 	// Reference to RAM
     bus: MemoryBus;
     
-    // instruction counter for disabling instructions
+    // instruction counter for disabling interrupts
     disableInterruptsCounter: number;
+
+    // instruction counter for enabling interrupts
+    shouldEnableInterrupts: boolean;
 
     // [used by DebuggerConsole] Opcode of the last executed instruction
     public lastExecutedOpCode: number;
@@ -352,7 +356,8 @@ export class CPU {
             carryFlag: false
         }
 
-        this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // -1 means to ignore this counter
+        this.disableInterruptsCounter = INTERRUPT_DELAY_COUNTER_INACTIVE; // -1 means to ignore this counter
+        this.shouldEnableInterrupts = false;
     }
 
     public setMemoryBus(bus: MemoryBus) {
@@ -360,9 +365,7 @@ export class CPU {
     }
 
     public RequestInterrupt(interruptBit: number) {
-        console.log(`setting IF and IE bits accordingly`);
         this.IF.Request(interruptBit);
-        this.IE.Enable(interruptBit);
     }
 
     public initAfterRomLoaded() {
@@ -411,6 +414,13 @@ export class CPU {
         this.C = result[0] & 0x00FF;
     }
 
+    public incrementDE() {
+        const result = wrappingTwoByteAdd(this.DE(), 1);
+        this.D = result[0] >> 8;
+        this.E = result[0] & 0x00FF;
+    }
+
+
     public getFlag(flag: number): boolean {
         if (flag === SUBTRACTION_FLAG) {
             return this.Flags.subtractionFlag;
@@ -445,10 +455,10 @@ export class CPU {
         } else if (flag === CARRY_FLAG) {
             this.Flags.carryFlag = true;
         }
-    }
+    }   
 
     public shouldDisableInterrupts() {
-        if (this.disableInterruptsCounter === DISABLE_COUNTER_INACTIVE) {
+        if (this.disableInterruptsCounter === INTERRUPT_DELAY_COUNTER_INACTIVE) {
             return false;
         }
 
@@ -462,11 +472,16 @@ export class CPU {
 
     public disableInterrupts() {
         this.IME = 0x00;
-        this.disableInterruptsCounter = DISABLE_COUNTER_INACTIVE; // prevent interrupts from being disabled again
+        this.disableInterruptsCounter = INTERRUPT_DELAY_COUNTER_INACTIVE; // prevent interrupts from being disabled again
     }
 
     public startDisableInterrupt() {
         this.disableInterruptsCounter = 1;
+    }
+
+    public enableInterrupts() {
+        this.IME = 0x01;
+        this.shouldEnableInterrupts = false;
     }
 
     // @return boolean -> true if interrupt was invoked, false otherwise;
@@ -949,6 +964,9 @@ export class CPU {
         } else if (currByte === 0xE9) {
             this.lastExecutedOpCode = 0xE9;
             return 'JP (HL)';
+        } else if (currByte === 0x13) {
+            this.lastExecutedOpCode = 0x13;
+            return 'INC DE';
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -981,7 +999,7 @@ export class CPU {
                 this.lastExecutedOpCode = 0xCB87;
                 return 'RES 0, A';
             case 0x86:
-                this.lastExecutedOpCode = 0xCB88;
+                this.lastExecutedOpCode = 0xCB86;
                 return 'RES 0, (HL)';
             default:
                 // if (nextInstrByte >= 0x80 && nextInstrByte <= 0x87) {
@@ -1409,8 +1427,7 @@ export class CPU {
             return 16;
         } else if (currByte === 0xFB) {
             // EI
-            console.log(`ENABLED INTERRUPTS GLOBALLY. IE=${displayAsHex(this.IE.RawValue)}, IF=${displayAsHex(this.IF.RawValue)}`);
-            this.IME = 0x01;
+            this.shouldEnableInterrupts = true;
             this.PC++;
 
             return 4;
@@ -1916,6 +1933,11 @@ export class CPU {
             // 'JP (HL)';
             this.PC = this.HL;
             return 4;
+        } else if (currByte === 0x13) {
+            // INC DE
+            this.incrementDE();
+            this.PC++;
+            return 8;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -1959,12 +1981,23 @@ export class CPU {
                 return 8;
             case 0x36:
                 // SWAP (HL)
-                const value = this.bus.readByte(this.HL);
-                const swapped = this.swapNibblesOf(value);
+                const swapValue = this.bus.readByte(this.HL);
+                const swapped = this.swapNibblesOf(swapValue);
                 this.bus.writeByte(this.HL, swapped);
                 this.PC += 2;
                 return 16;
-                
+            case 0x87:
+                // 'RES 0, A'
+                // Reset bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
+                this.A = this.clearBit(this.A, 0);
+                this.PC += 2;
+                return 8;
+            case 0x86:
+                // 'RES 0, (HL)'
+                const hlValue = this.clearBit(this.bus.readByte(this.HL), 0);
+                this.bus.writeByte(this.HL, hlValue);
+                this.PC += 2;
+                return 16;
             default:
                 console.log(`Error: encountered an unsupported opcode of ${displayAsHex(currByte)} ${displayAsHex(nextInstrByte)} at address ${displayAsHex(this.PC)}`);
                 return 0;
@@ -1973,6 +2006,16 @@ export class CPU {
 
         console.log(`Error: encountered an unsupported opcode of ${displayAsHex(currByte)} at address ${displayAsHex(this.PC)}`);
         return 0;
+    }
+
+    private setBit(value: number, bit: number) {
+        const mask = 0x1 << bit;
+        return value | mask;
+    }
+
+    private clearBit(value: number, bit: number) {
+        const mask = 0x1 << bit;
+        return value & ~mask;
     }
 
     // @return number => the resulting value after its nibbles are swapped
@@ -2054,9 +2097,6 @@ export class Gameboy {
   public cpu: CPU;
   public ppu: PPU;
 
-  // counter of cycles that has passed since CPU was powered on
-  public cyclesCounter: number;
-
   // debugger information
   private inDebugMode: boolean;
   private debugger: DebugConsole;
@@ -2090,8 +2130,6 @@ export class Gameboy {
 
       // initialize the CPU
       this.cpu.initAfterRomLoaded();
-
-      this.cyclesCounter = 0;
   }
 
   public processInterrupts(): boolean {
@@ -2114,7 +2152,6 @@ export class Gameboy {
     if (cycles === 0) {
         return false;
     }
-    this.cyclesCounter += cycles;
 
     if (prevProgramCounter === this.cpu.PC) {
         console.log(`Error: cpu.PC was not changed after last executeInstruction() call. Infinite loop`);
@@ -2138,7 +2175,7 @@ export class Gameboy {
       return true;
     }
 
-    this.ppu.step(this.cyclesCounter);
+    this.ppu.step(cycles);
 
     // check if V Blank Interrupt was requested
     if (this.processInterrupts()) {
@@ -2146,6 +2183,10 @@ export class Gameboy {
       // TODO: Disable interrupts globally
       this.debugger.pushCallAddress(this.cpu.PC);
       return true;
+    }
+
+    if (this.cpu.shouldEnableInterrupts) {
+        this.cpu.enableInterrupts();
     }
 
     return true;

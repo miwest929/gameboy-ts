@@ -1,4 +1,4 @@
-import { multiDimRepeat } from './utils';
+import { multiDimRepeat, displayAsHex } from './utils';
 import { MemoryBus, Interrupt } from './emulator';
 
 const GB_SCREEN_WIDTH_IN_PX = 160;
@@ -327,7 +327,6 @@ export class PPU {
 
     // ppu special registers
     public LY: number;
-    public LX: number;
     public WINDOWY: number;
     public WINDOWX: number;
     public SCROLL_Y: number;
@@ -351,7 +350,6 @@ export class PPU {
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
         this.clock = 0x00;
         this.LY = 0x00;
-        this.LX = 0x00;
         this.WINDOWX = 0x00;
         this.WINDOWY = 0x00;
         this.LCDC_REGISTER = new LCDC();

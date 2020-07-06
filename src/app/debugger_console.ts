@@ -132,7 +132,6 @@ export class DebugConsole {
     public displayPPUData() {
         console.log(`
         ---------------------- PPU ---------------------
-        LX = ${displayAsHex(this.gameboy.ppu.LX)} (${this.gameboy.ppu.LX})
         LY = ${displayAsHex(this.gameboy.ppu.LY)} (${this.gameboy.ppu.LY})
         WINDOWX = ${displayAsHex(this.gameboy.ppu.WINDOWX)} (${this.gameboy.ppu.WINDOWX})
         WINDOWY = ${displayAsHex(this.gameboy.ppu.WINDOWY)} (${this.gameboy.ppu.WINDOWY})
