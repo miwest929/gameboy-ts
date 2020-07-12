@@ -947,6 +947,9 @@ export class CPU {
             // ADD A, d8
             const value = this.readTwoByteValue(this.PC + 1);
             return `ADD A, ${value}`;
+        } else if (currByte === 0xEE) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `XOR ${value}`;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
             this.lastExecutedOpCode = (this.lastExecutedOpCode << 8) | nextInstrByte;
@@ -991,6 +994,20 @@ export class CPU {
                 return 'BIT 7, A';
             case 0x50:
                 return 'BIT 2, B';
+            case 0x51:
+                return 'BIT 2, C';
+            case 0x52:
+                return 'BIT 2, D';
+            case 0x53:
+                return 'BIT 2, E';
+            case 0x54:
+                return 'BIT 2, H';
+            case 0x55:
+                return 'BIT 2, L';
+            case 0x56:
+                return 'BIT 2, (HL)';
+            case 0x57:
+                return 'BIT 2, A';
             default:
                 return '<unknown>';
             }
@@ -2170,6 +2187,13 @@ export class CPU {
             this.A = this.addOneByte(this.A, value);
             this.PC += 2;
             return 8;
+        } else if (currByte === 0xEE) {
+            // XOR d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.A = this.A ^ value;
+            this.updateZeroFlagAndClearOthers();
+            this.PC += 2;
+            return 8;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2286,6 +2310,46 @@ export class CPU {
                 this.updateZeroFlagWithBit(this.A, 7);
                 this.PC += 2;
                 return 8;
+            case 0x50:
+                // 'BIT 2, B';
+                this.updateZeroFlagWithBit(this.B, 2);
+                this.PC += 2;
+                return 8;
+            case 0x51:
+                // 'BIT 2, C';
+                this.updateZeroFlagWithBit(this.C, 2);
+                this.PC += 2;
+                return 8;
+            case 0x52:
+                // 'BIT 2, D';
+                this.updateZeroFlagWithBit(this.D, 2);
+                this.PC += 2;
+                return 8;
+            case 0x53:
+                // 'BIT 2, E';
+                this.updateZeroFlagWithBit(this.E, 2);
+                this.PC += 2;
+                return 8;
+            case 0x54:
+                // 'BIT 2, H';
+                this.updateZeroFlagWithBit(this.H(), 2);
+                this.PC += 2;
+                return 8;
+            case 0x55:
+                // 'BIT 2, L';
+                this.updateZeroFlagWithBit(this.L(), 2);
+                this.PC += 2;
+                return 8;
+            case 0x56:
+                // 'BIT 2, (HL)';
+                this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 2);
+                this.PC += 2;
+                return 8;
+            case 0x57:
+                // 'BIT 2, A';
+                this.updateZeroFlagWithBit(this.A, 2);
+                this.PC += 2;
+                return 8;
             default:
                 console.log(`Error: encountered an unsupported opcode of ${displayAsHex(currByte)} ${displayAsHex(nextInstrByte)} at address ${displayAsHex(this.PC)}`);
                 return 0;
@@ -2298,7 +2362,9 @@ export class CPU {
 
     private updateZeroFlagWithBit(value: number, bit: number) {
         const val = this.getBit(value, bit);
-        val === 1 ? this.setFlag(ZERO_FLAG) : this.clearFlag(ZERO_FLAG); 
+        val === 1 ? this.setFlag(ZERO_FLAG) : this.clearFlag(ZERO_FLAG);
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.setFlag(HALF_CARRY_FLAG);
     }
 
     private getBit(value: number, bit: number) {
