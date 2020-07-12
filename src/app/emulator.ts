@@ -3,7 +3,6 @@ import { uInt8ArrayToUtf8, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
 import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
-import { HitTestAccuracy } from '@nodegui/nodegui';
 
 /*
 References:
@@ -38,6 +37,12 @@ $8000-$97FF - Character RAM
 const RAM_SIZE_IN_BYTES = 65536;
 const ROM_BANK_END_ADDR = 32767;
 // The boot rom is readable while booting but afterwards the address space of the ROM is remapped for interrupt vectors and other uses.
+
+// const JOYPAD_INPUT_REGISTER = 0xFF00;
+// export class JoypadRegister {
+
+// }
+
 
 const IE_ADDR = 0xFFFF;
 class InterruptEnabledRegister {
@@ -665,29 +670,22 @@ export class CPU {
         } else if (currByte === 0x79) {
             return "LD A, C";
         } else if (currByte === 0xFF) {
-            this.lastExecutedOpCode = 0xFF;
             return "RST 38H";
         } else if (currByte === 0x3E) {
-            this.lastExecutedOpCode = 0x3E;
             let value = this.bus.readByte(this.PC + 1);
             return `LD A, ${displayAsHex(value)}`;
         } else if (currByte === 0xF3) {
-            this.lastExecutedOpCode = 0xF3;
             return "DI";
         } else if (currByte === 0xE0) {
-            this.lastExecutedOpCode = 0xE0;
             let value = this.bus.readByte(this.PC + 1);
             return `LDH (${0xFF00 + value}), A`;
         } else if (currByte === 0xF0) {
-            this.lastExecutedOpCode = 0xF0;
             let value = this.bus.readByte(this.PC + 1);
             return `LDH A, (${0xFF00 + value})`;
         } else if (currByte === 0xFE) {
-            this.lastExecutedOpCode = 0xFE;
             let value = this.bus.readByte(this.PC + 1);
             return `CP ${value}`;
         } else if (currByte === 0x36) {
-            this.lastExecutedOpCode = 0x36;
             const value = this.bus.readByte(this.PC + 1);
             return `LD (HL), ${value}`;
         } else if (currByte === 0xEA) {
@@ -720,28 +718,20 @@ export class CPU {
         } else if (currByte === 0xC5) {
             return 'PUSH BC'
         } else if (currByte === 0xD5) {
-            this.lastExecutedOpCode = 0xD5;
             return 'PUSH DE'
         } else if (currByte === 0xE5) {
-            this.lastExecutedOpCode = 0xE5;
             return 'PUSH HL'
         } else if (currByte === 0xA7) {
-            this.lastExecutedOpCode = 0xA7;
             return 'AND A';
         } else if (currByte === 0xA0) {
-            this.lastExecutedOpCode = 0xA0;
             return 'AND B';
         } else if (currByte === 0xA1) {
-            this.lastExecutedOpCode = 0xA1;
             return 'AND C';
         } else if (currByte === 0xA2) {
-            this.lastExecutedOpCode = 0xA2;
             return 'AND D';
         } else if (currByte === 0xA3) {
-            this.lastExecutedOpCode = 0xA3;
             return 'AND E';
         } else if (currByte === 0xA4) {
-            this.lastExecutedOpCode = 0xA4;
             return 'AND H';
         } else if (currByte === 0xA5) {
             return 'AND L';
@@ -942,9 +932,21 @@ export class CPU {
             return 'LD H, (HL)';
         } else if (currByte === 0x67) {
             return 'LD H, A';
+        } else if (currByte === 0x7A) {
+            return 'LD A, D';
+        } else if (currByte === 0x7D) {
+            return 'LD A, L';
+        } else if (currByte === 0x70) {
+            return 'LD (HL), B';
+        } else if (currByte === 0x71) {
+            return 'LD (HL), C';
         } else if (currByte === 0xC2) {
             const addr = this.readTwoByteValue(this.PC + 1);
             return `JP NZ, ${addr}`;
+        } else if (currByte === 0xC6) {
+            // ADD A, d8
+            const value = this.readTwoByteValue(this.PC + 1);
+            return `ADD A, ${value}`;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
             this.lastExecutedOpCode = (this.lastExecutedOpCode << 8) | nextInstrByte;
@@ -987,6 +989,8 @@ export class CPU {
                 return 'BIT 7, (HL)';
             case 0x7F:
                 return 'BIT 7, A';
+            case 0x50:
+                return 'BIT 2, B';
             default:
                 return '<unknown>';
             }
@@ -2140,6 +2144,32 @@ export class CPU {
               this.PC += 3;
               return 12;
             }
+        } else if (currByte === 0x7A) {
+            // 'LD A, D';
+            this.A = this.D;
+            this.PC++;
+            return 4;
+        } else if (currByte === 0x7D) {
+            // 'LD A, L';
+            this.A = this.L();
+            this.PC++;
+            return 4;
+        } else if (currByte === 0x70) {
+            // 'LD (HL), B';
+            this.bus.writeByte(this.HL, this.B);
+            this.PC++;
+            return 8;
+        } else if (currByte === 0x71) {
+            // 'LD (HL), C';
+            this.bus.writeByte(this.HL, this.C);
+            this.PC++;
+            return 8;
+        } else if (currByte === 0xC6) {
+            // ADD A, d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.A = this.addOneByte(this.A, value);
+            this.PC += 2;
+            return 8;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
