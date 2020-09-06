@@ -10,7 +10,7 @@ function getCommandLineArguments(): any[] {
       console.log(`Usage: ts-node src/app/gameboy.ts <path-to-rom> [debug]`);
       return null;
     }
-    
+  
     return [args[0], args[1] === 'debug' ? true : false];
 }
 
@@ -27,8 +27,7 @@ async function execute() {
   console.log(cart.getRomHeaderInfo());
   console.log('Powered on. Executing rom program');
   gameboy.powerOn();
-
-  gameboy.executeRom(); // TODO: Better interface is to pass the Cartridge instance to this function....
+  gameboy.executeRom(() => {}); // TODO: Better interface is to pass the Cartridge instance to this function....
 }
 
 execute();

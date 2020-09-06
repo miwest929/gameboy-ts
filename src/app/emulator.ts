@@ -177,22 +177,26 @@ export class MemoryBus {
             this.cpu.IF.RawValue = value;
         } else if (addr === IE_ADDR) { // InterruptEnabledRegister
             this.cpu.IE.RawValue = value;
-        } else if (addr === 0xff46) { // DMA Transfer and Start Address
+        } else if (addr === 0xFF46) { // DMA Transfer and Start Address
             // Initiate DMA Transfer.
             // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
             // Dest. address range is 0xFE00 - 0xFE9F
+            //console.log("PERFORMING DMA TRANSER!");
             this.performDMAOAMTransfer(value);
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr === 0xFF01) {
-            console.log(`OUT: ${String.fromCharCode(value)}`);
+            // console.log(`OUT: ${String.fromCharCode(value)}`);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
-            console.warn("I/O Registers aren't supported yet");
+            // console.warn("I/O Registers aren't supported yet");
         } else if (addr >= 0x0000 && addr <= 0x7FFF) {  
             this.cartridge.mbc.WriteByte(addr, value);
         } else if (addr >= 0xFEA0 && addr <= 0xFEFF) {
             // Ignore writes to this range as its undocumented
         } else {
+            if (addr === 0xFFC5) {
+                console.log(`PC = ${displayAsHex(this.cpu.PC)}, addr = ${displayAsHex(addr)}, value = ${value}`);
+            }
             this.memory.write(addr, value);
         }
     }
@@ -299,7 +303,7 @@ const makeSigned = (value: number, bytesCount: number): number => {
 // needs to initialize the registers to their values as 
 // if the bootstrap has run
 const INITIAL_A_REG_VALUE = 0x01;
-const INITIAL_F_REG_VALUE = 0x80;
+const INITIAL_F_REG_VALUE = 0xB0;
 const INITIAL_B_REG_VALUE = 0x00;
 const INITIAL_C_REG_VALUE = 0x13;
 const INITIAL_D_REG_VALUE = 0x00;
@@ -354,12 +358,12 @@ export class CPU {
         this.HL = INITIAL_HL_REG_VALUE;
 
         // NOTE: According to BGB Debugger. This register is initialized to 0xB0 (eg: zero, hc, and carry flags on)
-        this.F = INITIAL_F_REG_VALUE; // 0x80 = 0x1000xxxx
+        this.F = INITIAL_F_REG_VALUE; // 0xB0 = 0x1011xxxx
         this.Flags = {
             zeroFlag: true,
             subtractionFlag: false,
-            halfCarryFlag: false,
-            carryFlag: false
+            halfCarryFlag: true,
+            carryFlag: true
         }
 
         this.disableInterruptsCounter = INTERRUPT_DELAY_COUNTER_INACTIVE; // -1 means to ignore this counter
@@ -436,6 +440,15 @@ export class CPU {
         return result[0];
     }
 
+    public subOneByte(val1: number, val2: number, carryVal = 0) {
+        const result = wrappingByteSub(val1, val2 + carryVal);
+        this.updateSubHalfCarryFlag(val1, val2);
+        this.setFlag(SUBTRACTION_FLAG);
+        this.clearFlag(ZERO_FLAG);
+        result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
+        return result[0];
+    }
+
     public incrementBC() {
         const result = wrappingTwoByteAdd(this.BC(), 1);
         this.B = result[0] >> 8;
@@ -483,7 +496,37 @@ export class CPU {
         } else if (flag === CARRY_FLAG) {
             this.Flags.carryFlag = true;
         }
-    }   
+    }
+
+    public loadFlags(value: number): FlagRegister {
+        return {
+            subtractionFlag: (value & 0x80) === 0x80,
+            zeroFlag: (value & 0x40) === 0x40,
+            halfCarryFlag: (value & 0x20) === 0x20,
+            carryFlag: (value & 0x10) === 0x10
+        }
+    }
+
+    public serializeFlags(flags: FlagRegister): number {
+        let value = 0x00;
+        if (flags.subtractionFlag) {
+          value |= 0x80;
+        }
+
+        if (flags.zeroFlag) {
+            value |= 0x40;
+        }
+
+        if (flags.halfCarryFlag) {
+            value |= 0x20;
+        }
+
+        if (flags.carryFlag) {
+            value |= 0x10;
+        }
+
+        return value;
+    }
 
     public shouldDisableInterrupts() {
         if (this.disableInterruptsCounter === INTERRUPT_DELAY_COUNTER_INACTIVE) {
@@ -556,7 +599,7 @@ export class CPU {
                 3. The high byte of the PC is set to 0, the low byte is set to the address of the handler ($40,$48,$50,$58,$60). This consumes one last machine cycle.
             */
             this.IME = 0x00;
-            console.log(`****************** INVOKED INTERRUPT. PC = ${this.PC} *********************`);
+            // console.log(`****************** INVOKED INTERRUPT. PC = ${this.PC} *********************`);
             const [higherByte, lowerByte] = this.split16BitValueIntoTwoBytes(returnAddr);
             this.stackPush(higherByte);
             this.stackPush(lowerByte);
@@ -575,6 +618,7 @@ export class CPU {
     //       Since that would be a gigantic refactoring, hold off doing it until the emulator is working
     public disassembleNextInstruction(): string {
         const currByte = this.bus.readByte(this.PC);
+        const op = this.bus.readByte(this.PC);
         this.lastExecutedOpCode = currByte;
     	if (currByte === 0x31) {
             const lsb = this.bus.readByte(this.PC + 1);
@@ -950,6 +994,17 @@ export class CPU {
         } else if (currByte === 0xEE) {
             const value = this.bus.readByte(this.PC + 1);
             return `XOR ${value}`;
+        } else if (currByte === 0xC4) {
+            const addr = this.readTwoByteValue(this.PC + 1);
+            return `CALL NZ, ${displayAsHex(addr)}`;
+        } else if (currByte === 0xD6) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `SUB ${displayAsHex(value)}`;
+        } else if (currByte === 0xAE) {
+            return `XOR (HL)`;
+        } else if (currByte === 0x26) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD H, ${value}`;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
             this.lastExecutedOpCode = (this.lastExecutedOpCode << 8) | nextInstrByte;
@@ -1121,7 +1176,6 @@ export class CPU {
             this.E = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.E);
-            this.clearFlag(CARRY_FLAG);
 
             this.PC++;
             return 4;
@@ -1151,10 +1205,9 @@ export class CPU {
         } else if (currByte === 0x25) {
             // DEC H
             this.decrementH();
-            this.updateSubHalfCarryFlag(this.L(), 1);
+            this.updateSubHalfCarryFlag(this.H(), 1);
             this.setFlag(SUBTRACTION_FLAG);
-            this.updateZeroFlag(this.L());
-            this.clearFlag(CARRY_FLAG);
+            this.updateZeroFlag(this.H());
 
             this.PC++;
             return 4;
@@ -1279,11 +1332,6 @@ export class CPU {
             // JR r8
             const value = this.bus.readByte(this.PC + 1);
             const offset = makeSigned(value, 1);
-            if (offset === 0) {
-                console.log("JR 0 would lead to an infinite loop. SKipping for now");
-                this.PC += 2;
-                return 8;
-            }
             this.PC += 2; // move to next instruction then add offset
             const addr = this.PC + offset;
             this.PC = addr;
@@ -1448,7 +1496,7 @@ export class CPU {
         } else if (currByte === 0xF5) {
             // PUSH AF
             this.stackPush(this.A);
-            this.stackPush(this.F);
+            this.stackPush( this.serializeFlags(this.Flags) );
             this.PC++;
             return 16;
         } else if (currByte === 0xC5) {
@@ -1470,68 +1518,33 @@ export class CPU {
             this.PC++;
             return 16;
         } else if (currByte === 0xA7) {
-            // AND A
-            this.A = this.A & this.A;
-            this.updateZeroFlag(this.A);
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
+            // AND A           
             this.PC++;
-            return 4;
+            return this.executeAnd(this.A);
         } else if (currByte === 0xA0) {
-            // AND B
-            this.A = this.A & this.B;
-            this.updateZeroFlag(this.B);
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
+            // AND B           
             this.PC++;
-            return 4;
+            return this.executeAnd(this.B);
         } else if (currByte === 0xA1) {
             // AND C
-            this.A = this.A & this.C;
-            this.updateZeroFlag(this.C);
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
             this.PC++;
-            return 4;
+            return this.executeAnd(this.C);
         } else if (currByte === 0xA2) {
             // AND D
-            this.A = this.A & this.D;
-            this.updateZeroFlag(this.D);
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
             this.PC++;
-            return 4;
+            return this.executeAnd(this.D);
         } else if (currByte === 0xA3) {
             // AND E
-            this.A = this.A & this.E;
-            this.updateZeroFlag(this.E);
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
             this.PC++;
-            return 4;
+            return this.executeAnd(this.E);
         } else if (currByte === 0xA4) {
             // AND H
-            this.A = this.A & this.H();
-            this.updateZeroFlag(this.H());
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
             this.PC++;
-            return 4;
+            return this.executeAnd(this.H());
         } else if (currByte === 0xA5) {
             // AND L
-            this.A = this.A & this.L();
-            this.updateZeroFlag(this.L());
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.setFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);            
             this.PC++;
-            return 4;
+            return this.executeAnd(this.L());
         } else if (currByte === 0x28) {
             // JR Z, r8
             const value = this.bus.readByte(this.PC + 1);
@@ -1607,7 +1620,6 @@ export class CPU {
             this.A = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.A);
-            this.clearFlag(CARRY_FLAG);
 
             this.PC++;
             return 4;
@@ -1617,7 +1629,6 @@ export class CPU {
             this.updateSubHalfCarryFlag(this.L(), 1);
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.L());
-            this.clearFlag(CARRY_FLAG);
 
             this.PC++;
             return 4;
@@ -1680,7 +1691,8 @@ export class CPU {
             return 12;
         } else if (currByte === 0xF1) {
             // POP AF
-            this.F = this.stackPop();
+            const popped = this.stackPop();
+            this.Flags = this.loadFlags(popped);
             this.A = this.stackPop();
             this.PC++;
             return 12;
@@ -2194,6 +2206,29 @@ export class CPU {
             this.updateZeroFlagAndClearOthers();
             this.PC += 2;
             return 8;
+        } else if (currByte === 0xC4) {
+            // CALL NZ, a16
+            const addr = this.readTwoByteValue(this.PC + 1);
+            if (!this.Flags.zeroFlag) {
+                this.PC = addr;
+                return 24;
+            }
+
+            this.PC += 3;
+            return 12;
+        } else if (currByte === 0xD6) {
+            // SUB d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.A = this.subOneByte(this.A, value);
+            this.PC += 2;
+            return 8;
+        } else if (currByte === 0xAE) {
+            // XOR (HL)
+            const value = this.bus.readByte(this.HL);
+            this.A ^= value;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 8;
         } else if (currByte === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2382,6 +2417,15 @@ export class CPU {
         return value & ~mask;
     }
 
+    private executeAnd(operand: number) {
+        this.A = this.A & operand;
+        this.updateZeroFlag(this.A);
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.setFlag(HALF_CARRY_FLAG);
+        this.clearFlag(CARRY_FLAG);
+        return 4; // consumes 4 cycles
+    }
+
     // @return number => the resulting value after its nibbles are swapped
     private swapNibblesOf(value: number): number {
         // swap upper and lower nibbles of A
@@ -2512,9 +2556,13 @@ export class Gameboy {
       console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
       this.debugger.showConsole();
     }
+    console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
 
     // ExecuteNextInstruction will modify the PC register appropriately
+    const prevSP = this.cpu.SP;
+    const prevPC = this.cpu.PC;
     const cycles = this.cpu.executeInstruction();
+
     if (cycles === 0) {
         console.log(`Executed total of ${this.totalCpuInstructionsExecuted} instructions`);
         return false;
@@ -2560,11 +2608,21 @@ export class Gameboy {
     return true;
   }
 
-  public async executeRom() {
+  public async executeRom(updateScreenCallback) {
     let keepRunning = true;
     this.totalCpuInstructionsExecuted = 0;
+
+    const updateFreqInMs = 1000 / 60;
+    let lastUpdateTime = performance.now(); // new Date();
+
     while (keepRunning) {
       keepRunning = await this.executeNextTick();
+
+      const currTime = performance.now();
+      if ((currTime - lastUpdateTime) > updateFreqInMs) {
+        lastUpdateTime = currTime;
+        updateScreenCallback( this.ppu.getScreenData() );
+      }
     }
 
     console.log('CPU stopped executing. Most likely due to executing instruction error');
@@ -2643,7 +2701,6 @@ export class Cartridge {
             console.log(`ERROR: MBC of type ${romHeader.cartridgeType} is not currently supported`);
             this.mbc = null;
         }
-
     }
 
     public getROMSize(romSizeHeaderValue) {

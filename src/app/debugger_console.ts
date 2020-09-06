@@ -239,6 +239,11 @@ export class DebugConsole {
                 const addr = parseInt(args[0], 16);
                 this.breakpoints.push(new AddressBreakpoint(addr));
                 console.log(`Set new breakpoint at address 0x${displayAsHex(addr)}`);
+            } else if (command === "listbp") {
+                console.log("Following are the Address breakpoints:");
+                const addressBps = this.breakpoints.filter((bp) => bp.constructor.name === 'AddressBreakpoint');
+                const messages = addressBps.map((bp) => `${bp.toString()}\n`);
+                console.log(messages.join('\n'));
             } else if (command === "trace") {
                 // Display list of call addresses. Every time a call happens its address will be traced
                 const formattedAddrs = this.pastAddresses.map((a) => displayAsHex(a));

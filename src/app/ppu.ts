@@ -136,10 +136,10 @@ export class LCDC {
 
     public backgroundAndWindowTileAddr(): number { // bit 4
         if ((this.RawValue & 0x10) === 0x10) { // flag is on
-            return 0x8000; // endAddr = 0x8FFF
-        } else {
-            return 0x8800; // endAddr = 0x97FF
-        }
+             return 0x8000; // endAddr = 0x8FFF
+         } else {
+             return 0x8800; // endAddr = 0x97FF
+         }
     }
 
     // just returns the start address since block length is constant
@@ -274,6 +274,11 @@ enum BGP_COLOR {
     Black = 3
 }
 
+// Possible shades
+// 0  White
+// 1  Light gray
+// 2  Dark gray
+// 3  Black
 class BGPPalette {
     RawValue: number;
     ColorThree: number;
@@ -350,6 +355,8 @@ export class PPU {
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
         this.clock = 0x00;
         this.LY = 0x00;
+        this.SCROLL_X = 0x00;
+        this.SCROLL_Y = 0x00;
         this.WINDOWX = 0x00;
         this.WINDOWY = 0x00;
         this.LCDC_REGISTER = new LCDC();
@@ -426,7 +433,7 @@ export class PPU {
         for (let i = 0; i < GB_SCREEN_HEIGHT_IN_PX; i++) {
             for (let j = 0; j < GB_SCREEN_WIDTH_IN_PX; j++) {
                 const wrappedY = (i + this.SCROLL_Y) % 256;
-                const wrappedX = (i + this.SCROLL_X) % 256;
+                const wrappedX = (j + this.SCROLL_X) % 256;
                 buffer[i][j] = this.pixels[wrappedY][wrappedX];
             }
         }
@@ -526,11 +533,11 @@ export class PPU {
     //   Byte 2-3  Next Line
     // @return number[] -> 8 pixel colors for the correct line in the tile
     private readScanlineFromTileData(tileId: number, lineOffset: number) {
-      const baseTileAddr = 0x8000 + (tileId * 16);
+      const baseTileAddr = this.LCDC_REGISTER.backgroundAndWindowTileAddr() + (tileId * 16);
       const baseTileDataAddr = baseTileAddr + lineOffset * 2;
       const lsbPixels = this.bus.readByte(baseTileDataAddr);
       const msbPixels = this.bus.readByte(baseTileDataAddr + 1);
-
+      //console.log(`LY = ${this.LY}, tileId = ${tileId}, lineOffset = ${lineOffset}`);
       // 8 bits
       let pixel0 = ((msbPixels & 0x80) >> 6) | ((lsbPixels & 0x80) >> 7);
       let pixel1 = ((msbPixels & 0x40) >> 6) | ((lsbPixels & 0x40) >> 7);
@@ -541,14 +548,54 @@ export class PPU {
       let pixel6 = ((msbPixels & 0x02) >> 6) | ((lsbPixels & 0x02) >> 7);
       let pixel7 = ((msbPixels & 0x01) >> 6) | ((lsbPixels & 0x01) >> 7);
 
+      // map the pixels value to their actual colors according to BGP register
+
       return [pixel0, pixel1, pixel2, pixel3, pixel4, pixel5, pixel6, pixel7];
     }
 
+    private bitNegation(value: number): number {
+        let binaryString: string = value.toString(2);
+        let negatedBinary: string = "";
+        for (let i = 0; i < binaryString.length; i++) {
+            negatedBinary += binaryString[i] === '1' ? '0' : '1';
+        }
+        return parseInt(negatedBinary, 2);
+    }
+
+    private makeSigned(value: number, bytesCount: number): number {
+        let msbMask: number = 0x80;
+        if (bytesCount === 2) {
+            msbMask = 0x8000;
+        }
+        
+        if ((value & msbMask) > 0) {
+          // value is negative
+          return -(this.bitNegation(value) + 1);
+        }
+      
+        return value;
+      }
+
+    private calculateTileId(tileMapStartAddr: number, tOffset: number) {
+      const tileIdAddr = tileMapStartAddr + tOffset;
+      let tileId = this.bus.readByte(tileIdAddr);
+      const tileDataMode = this.LCDC_REGISTER.backgroundAndWindowTileAddr();
+      if (tileDataMode === 0x8800) {
+          let signedTileId = this.makeSigned(tileId, 1);
+          if (signedTileId < 128) {
+              return tileId + 256;
+          }
+      }
+
+      return tileId;
+    }
+
     private renderScanline(tileMapStartAddr: number, lineOffset: number) {
-      //console.log(`rendering scanline ${this.LY}`);
+        // Each background tile ix 8x8
       for (let tOffset = 0; tOffset < 32; tOffset++) {
-          const tileIdAddr = tileMapStartAddr + tOffset;
-          const tileId = this.readFromVRAM(tileIdAddr - Address.VRAM_ADDR_BEGIN);
+          // const tileIdAddr = tileMapStartAddr + tOffset;
+          const tileId = this.calculateTileId(tileMapStartAddr, tOffset); // this.bus.readByte(tileIdAddr);
+          //const tileId = this.readFromVRAM(tileIdAddr - Address.VRAM_ADDR_BEGIN);
           const scanlinePixels = this.readScanlineFromTileData(tileId, lineOffset); // array of 8 pixels
 
           // "render" pixels in tileScanlineData
@@ -575,9 +622,9 @@ export class PPU {
 
         // Every scanline begins with X = 0
         // The base address 
-        const tileMapAddr = bgTileMapAddr + (this.LY / 8) * 32; // bgTileMapAddr + adjustedScreenY;
+        const tileMapAddr = bgTileMapAddr + Math.floor(this.LY / 8) * 32; // bgTileMapAddr + adjustedScreenY;
         const lineOffset = this.LY % 8; // TODO: Verify this computation
-
+        // console.log(`LY = ${this.LY}, BaseTileMapAddress = ${displayAsHex(bgTileMapAddr)}, TileMapAddress = ${displayAsHex(tileMapAddr)}, lineOffset = ${lineOffset}`);
         //const initialTileX = this.SCROLL_X % 8;
         //const initialTileY = adjustedScreenY % 8;
         this.renderScanline(tileMapAddr, lineOffset);
