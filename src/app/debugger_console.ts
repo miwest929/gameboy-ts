@@ -53,7 +53,7 @@ export class AddressBreakpoint {
    }
 
    public toString() {
-       return `<AddressBreakpoint addr=${this.address}>`;
+       return `<AddressBreakpoint addr=${displayAsHex(this.address)}>`;
    }
 }
 
@@ -242,7 +242,7 @@ export class DebugConsole {
             } else if (command === "listbp") {
                 console.log("Following are the Address breakpoints:");
                 const addressBps = this.breakpoints.filter((bp) => bp.constructor.name === 'AddressBreakpoint');
-                const messages = addressBps.map((bp) => `${bp.toString()}\n`);
+                const messages = addressBps.map((bp) => `${bp.toString()}`);
                 console.log(messages.join('\n'));
             } else if (command === "trace") {
                 // Display list of call addresses. Every time a call happens its address will be traced

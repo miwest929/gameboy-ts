@@ -195,9 +195,6 @@ export class MemoryBus {
         } else if (addr >= 0xFEA0 && addr <= 0xFEFF) {
             // Ignore writes to this range as its undocumented
         } else {
-            if (addr === 0xFFC5) {
-                console.log(`PC = ${displayAsHex(this.cpu.PC)}, addr = ${displayAsHex(addr)}, value = ${value}`);
-            }
             this.memory.write(addr, value);
         }
     }
@@ -1068,6 +1065,22 @@ export class CPU {
                 return 'BIT 2, A';
             case 0x38:
                 return 'SRL B';
+            case 0x19:
+                return 'RR C';
+            case 0x18:
+                return 'RR B';
+            case 0x1A:
+                return 'RR D';
+            case 0x1B:
+                return 'RR E';
+            case 0x1C:
+                return 'RR H';
+            case 0x1D:
+                return 'RR L';
+            case 0x1E:
+                return 'RR (HL)';
+            case 0x1F:
+                return 'RR A';
             default:
                 return '<unknown>';
             }
@@ -2420,6 +2433,48 @@ export class CPU {
 
                 this.PC += 2;
                 return 8;
+            case 0x19:
+                // 'RR C';
+                // Rotate n right through Carry flag.
+                this.C = this.rotateRightThroughCarry(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x18:
+                // 'RR B';
+                this.B = this.rotateRightThroughCarry(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x1A:
+                // 'RR D';
+                this.D = this.rotateRightThroughCarry(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x1B:
+                // 'RR E';
+                this.E = this.rotateRightThroughCarry(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x1C:
+                // 'RR H';
+                this.updateH( this.rotateRightThroughCarry(this.H()) );
+                this.PC += 2;
+                return 8;
+            case 0x1D:
+                // 'RR L';
+                this.updateL( this.rotateRightThroughCarry(this.L()) );
+                this.PC += 2;
+                return 8;
+            case 0x1E:
+                // 'RR (HL)';
+                const value = this.bus.readByte(this.HL);
+                this.bus.writeByte(this.HL, this.rotateRightThroughCarry(value) );
+                this.PC += 2;
+                return 16;
+            case 0x1F:
+                // 'RR A';
+                this.A = this.rotateRightThroughCarry(this.A);
+                this.PC += 2;
+                return 8;
             default:
                 console.log(`Error: encountered an unsupported opcode of ${displayAsHex(op)} ${displayAsHex(nextInstrByte)} at address ${displayAsHex(this.PC)}`);
                 return 0;
@@ -2428,6 +2483,17 @@ export class CPU {
 
         console.log(`Error: encountered an unsupported opcode of ${displayAsHex(op)} at address ${displayAsHex(this.PC)}`);
         return 0;
+    }
+
+    private rotateRightThroughCarry(value: number): number {
+        // 1001 1010
+        // 0011 010[0] | [1]
+        const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
+        const msb = (value & 0x80) === 0x80 ? 0x1 : 0x0;
+        this.Flags.carryFlag = msb === 0x1 ? true : false;
+        const updated = (value >>> 1) | currCarry;
+        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        return updated;
     }
 
     private updateZeroFlagWithBit(value: number, bit: number) {
@@ -2591,7 +2657,7 @@ export class Gameboy {
       console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
       this.debugger.showConsole();
     }
-    console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
+    //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
 
     // ExecuteNextInstruction will modify the PC register appropriately
     const prevSP = this.cpu.SP;

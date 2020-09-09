@@ -4,6 +4,7 @@
   "description": "Play around with the MessagePack library for Typescript",
   "author": "Michael West",
   "license": "MIT",
+  "main": "dist/emulator.js",
   "scripts": {
     "build": "webpack -p",
     "startw": "webpack && qode ./dist/main.js",
