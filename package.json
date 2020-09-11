@@ -5,7 +5,16 @@
   "author": "Michael West",
   "license": "MIT",
   "main": "dist/emulator.js",
+  "files": [
+    "dist/emulator.js",
+    "dist/mbc.js",
+    "dist/ppu.js",
+    "dist/utils.js",
+    "dist/rom_loader.js",
+    "dist/debugger_console.js"
+  ],
   "scripts": {
+    "build": "tsc --p . --watch",
     "gb": "./node_modules/.bin/qode dist/main.js",
     "start": "tsc --p . --watch",
     "emu:debug": "./node_modules/.bin/ts-node src/app/gameboy.ts roms/tetris.gb debug",

@@ -30,7 +30,11 @@ export function sleep(ms) {
 }
 
 export function loadTextFile(filepath: string) {
-    return fs.readFileSync(filepath, 'utf8');
+    if (fs.readFileSync) {
+        return fs.readFileSync(filepath, 'utf8');
+    }
+
+    return "";
 }
 
 export function displayAsHex(n: number) {

@@ -1,4 +1,6 @@
 import { Cartridge, Gameboy } from './emulator';
+import { performance } from 'perf_hooks';
+import * as readlineSync from "readline-sync";
 
 function getCommandLineArguments(): any[] {
     const args = process.argv.slice(2);
@@ -20,7 +22,7 @@ async function execute() {
       process.exit(1);
   }
 
-  const gameboy = new Gameboy(debugMode);
+  const gameboy = new Gameboy(debugMode, performance, readlineSync);
   const cart = new Cartridge(romFilename); // second arg is for fromLocalFileSystem
   await gameboy.loadCartridge(cart);
 

@@ -1,5 +1,4 @@
 node_modules/**/*
 src/js/**/*
-dist/**/*
 roms/**/*
 tmp/**/*

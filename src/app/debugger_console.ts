@@ -1,11 +1,14 @@
 import { Gameboy, ZERO_FLAG, SUBTRACTION_FLAG, HALF_CARRY_FLAG, CARRY_FLAG } from "./emulator";
 import { loadTextFile, displayAsHex } from "./utils";
-import * as readlineSync from "readline-sync";
 
 export function loadBreakpoints(filename: string): Breakpoint[] {
     const breakpointsContents = loadTextFile(filename);
     const breakpoints: Breakpoint[] = [];
     
+    if (breakpointsContents === "") {
+        return [];
+    }
+
     for (const line of breakpointsContents.split("\n")) {
         const bp = Breakpoint.from(line);
         if (bp) {
@@ -114,10 +117,13 @@ export class DebugConsole {
 
     private pastAddresses: number[];
 
-    constructor(gb: Gameboy) {
+    private readlineSync: any;
+
+    constructor(gb: Gameboy, readlineSync?: any) {
         this.gameboy = gb;
         this.breakpoints = loadBreakpoints("./breakpoints");
         this.pastAddresses = [0x100]; // 0x100 is the address start executing..
+        this.readlineSync = readlineSync;
     }
 
     public breakpointTriggered() {
@@ -214,7 +220,7 @@ export class DebugConsole {
         let showDebugger = true;
 
         while (showDebugger) {
-            const command = readlineSync.question(`(h for help, c for continue) [${displayAsHex(this.gameboy.cpu.PC)}]> `, {hideEchoBack: false});
+            const command = this.readlineSync.question(`(h for help, c for continue) [${displayAsHex(this.gameboy.cpu.PC)}]> `, {hideEchoBack: false});
 
             if (command === "p cpu") {
                 this.displayCPUData();
