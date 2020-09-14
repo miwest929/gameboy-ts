@@ -2608,11 +2608,11 @@ export class Gameboy {
   // debugger information
   private inDebugMode: boolean;
   private debugger: DebugConsole;
+  private inFrameExecutionMode: boolean;
 
   private totalCpuInstructionsExecuted: number;
-  private performance: any;
 
-  constructor(inDebugMode = false, performance = null, readlineSync = null) {
+  constructor(inDebugMode = false, readlineSync = null, inFrameExecutionMode = false) {
     this.memory = new Memory();
     this.ppu = new PPU();
     this.cpu = new CPU();
@@ -2625,9 +2625,9 @@ export class Gameboy {
         console.log(`[WARN] Debug mode was requested but required library readlineSync was not provided.`);
     }
     this.debugger = new DebugConsole(this, readlineSync);
+    this.inFrameExecutionMode = inFrameExecutionMode;
 
     this.totalCpuInstructionsExecuted = 0;
-    this.performance = performance || window.performance;
   }
 
   public powerOn() {
@@ -2649,6 +2649,24 @@ export class Gameboy {
 
   public processInterrupts(): boolean {
       return this.cpu.processInterrupts();
+  }
+
+  // Keep executing instructions until VBLANK is complete
+  // (until LY reaches specific value)
+  // this will be executed 60 times a second
+  public async executeNextFrame(): Promise<boolean> {
+    let keepRunning = true;
+
+    // LY === 144 indicates VBLANK. VBLANK means that the screen just finished rendering pixels to the screen
+    let hasFinishedFrame = false;
+    while (keepRunning && !hasFinishedFrame) {
+        const previousLY = this.ppu.LY;
+        keepRunning = await this.executeNextTick();
+        hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
+    }
+    console.log("Finished executing next frame");
+
+    return keepRunning;
   }
 
   // @return boolean => should we continue executing
@@ -2713,21 +2731,19 @@ export class Gameboy {
     return true;
   }
 
-  public async executeRom(updateScreenCallback) {
+  public async executeRom() {
     let keepRunning = true;
     this.totalCpuInstructionsExecuted = 0;
 
-    const updateFreqInMs = 1000 / 60;
-    let lastUpdateTime = this.performance.now(); // new Date();
-    console.log(lastUpdateTime);
-
     while (keepRunning) {
-      keepRunning = await this.executeNextTick();
-
-      const currTime = this.performance.now();
-      if ((currTime - lastUpdateTime) > updateFreqInMs) {
-        lastUpdateTime = currTime;
-        updateScreenCallback( this.ppu.getScreenData() );
+      if (this.inFrameExecutionMode) {
+        keepRunning = await this.executeNextFrame();
+        // pause execution. show the debug console
+        if (keepRunning) {
+            this.debugger.showConsole();
+        }
+      } else {
+          keepRunning = await this.executeNextTick();
       }
     }
 

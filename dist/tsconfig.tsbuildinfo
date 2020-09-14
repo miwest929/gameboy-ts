@@ -177,7 +177,7 @@
         "affectsGlobalScope": false
       },
       "../src/app/ppu.ts": {
-        "version": "50d657de7c3840b7293eea0f2a87862654d6445581fc696236d76c11d98d1040",
+        "version": "728438d071d53c2cf89492b05814518c8de1c133de82b47522cc7c0598f526a3",
         "signature": "2e90e7b911df88710217376a2a2b18768a9b3b5060b39c0c446a276b76b148f6",
         "affectsGlobalScope": false
       },
@@ -187,8 +187,8 @@
         "affectsGlobalScope": false
       },
       "../src/app/emulator.ts": {
-        "version": "5b3696dc3fbfad40366f34a025bd0fa01888ae4a87bbf6b6a6cdada9a9c5cfd4",
-        "signature": "b1fe40cb1ecf3efd41cd70332e4c2e921abd444fa128f2ab7b9d7e52852cf6b1",
+        "version": "575888e85cf26f117cef77d0b9e722446ff6c1440f4f98691c4c2b70c4fc0d15",
+        "signature": "e15ee6e0a4ef5c3f81494520f9d4c5942111e2eeff0ef07b9b308c67bb94b7a4",
         "affectsGlobalScope": false
       },
       "../src/app/debugger_console.ts": {
@@ -197,7 +197,7 @@
         "affectsGlobalScope": false
       },
       "../src/app/gameboy.ts": {
-        "version": "bce11c193694d0bb2f11537a10fe5a2eee82a2eaa46cca6c0ef14db79751bd7e",
+        "version": "ad7159bf34aeeda9c37bd2c74b72f54ec822682a1a5df58bfa96d119f7ff748b",
         "signature": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
         "affectsGlobalScope": false
       },
@@ -1079,7 +1079,6 @@
       ],
       "../src/app/gameboy.ts": [
         "../node_modules/@types/node/ts3.1/fs.d.ts",
-        "../node_modules/@types/node/ts3.1/perf_hooks.d.ts",
         "../node_modules/@types/node/ts3.1/util.d.ts",
         "../node_modules/@types/node/ts3.4/fs.d.ts",
         "../node_modules/@types/node/ts3.4/util.d.ts",

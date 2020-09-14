@@ -2808,7 +2808,7 @@ exports.CPU = CPU;
 const ROM_BANK_0_START_ADDR = 0x0000;
 const ROM_BANK_0_END_ADDR = 0x3FFF;
 class Gameboy {
-    constructor(inDebugMode = false, performance = null, readlineSync = null) {
+    constructor(inDebugMode = false, readlineSync = null, inFrameExecutionMode = false) {
         this.memory = new Memory();
         this.ppu = new ppu_1.PPU();
         this.cpu = new CPU();
@@ -2820,8 +2820,8 @@ class Gameboy {
             console.log(`[WARN] Debug mode was requested but required library readlineSync was not provided.`);
         }
         this.debugger = new debugger_console_1.DebugConsole(this, readlineSync);
+        this.inFrameExecutionMode = inFrameExecutionMode;
         this.totalCpuInstructionsExecuted = 0;
-        this.performance = performance || window.performance;
     }
     powerOn() {
         if (!this.cartridge.isLoaded) {
@@ -2838,6 +2838,21 @@ class Gameboy {
     }
     processInterrupts() {
         return this.cpu.processInterrupts();
+    }
+    // Keep executing instructions until VBLANK is complete
+    // (until LY reaches specific value)
+    // this will be executed 60 times a second
+    async executeNextFrame() {
+        let keepRunning = true;
+        // LY === 144 indicates VBLANK. VBLANK means that the screen just finished rendering pixels to the screen
+        let hasFinishedFrame = false;
+        while (keepRunning && !hasFinishedFrame) {
+            const previousLY = this.ppu.LY;
+            keepRunning = await this.executeNextTick();
+            hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
+        }
+        console.log("Finished executing next frame");
+        return keepRunning;
     }
     // @return boolean => should we continue executing
     async executeNextTick() {
@@ -2892,18 +2907,19 @@ class Gameboy {
         }
         return true;
     }
-    async executeRom(updateScreenCallback) {
+    async executeRom() {
         let keepRunning = true;
         this.totalCpuInstructionsExecuted = 0;
-        const updateFreqInMs = 1000 / 60;
-        let lastUpdateTime = this.performance.now(); // new Date();
-        console.log(lastUpdateTime);
         while (keepRunning) {
-            keepRunning = await this.executeNextTick();
-            const currTime = this.performance.now();
-            if ((currTime - lastUpdateTime) > updateFreqInMs) {
-                lastUpdateTime = currTime;
-                updateScreenCallback(this.ppu.getScreenData());
+            if (this.inFrameExecutionMode) {
+                keepRunning = await this.executeNextFrame();
+                // pause execution. show the debug console
+                if (keepRunning) {
+                    this.debugger.showConsole();
+                }
+            }
+            else {
+                keepRunning = await this.executeNextTick();
             }
         }
         console.log('CPU stopped executing. Most likely due to executing instruction error');

@@ -173,6 +173,7 @@ const LCDC_MODES = {
 class LCDCStatus {
     constructor() {
         this.ModeFlag = "NotInitialized"; // the mode flag is not set initially. It needs to be set during PPU.step function
+        this.RawValue = 0x00; // meaningless number when STATUS flag is not initialized
     }
     update(value) {
         // don't touch the ModeFlag and the CoincidenceFlag
