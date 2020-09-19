@@ -3,6 +3,7 @@ import { uInt8ArrayToUtf8, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
 import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
+//import { performance } from 'perf_hooks';
 
 /*
 References:
@@ -616,6 +617,7 @@ export class CPU {
     public disassembleNextInstruction(): string {
         const op = this.bus.readByte(this.PC);
         this.lastExecutedOpCode = op;
+
     	if (op === 0x31) {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
@@ -2659,12 +2661,14 @@ export class Gameboy {
 
     // LY === 144 indicates VBLANK. VBLANK means that the screen just finished rendering pixels to the screen
     let hasFinishedFrame = false;
+    let instructionsExecuted = 0;
     while (keepRunning && !hasFinishedFrame) {
         const previousLY = this.ppu.LY;
         keepRunning = await this.executeNextTick();
         hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
+        instructionsExecuted++;
     }
-    console.log("Finished executing next frame");
+    console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
 
     return keepRunning;
   }
@@ -2672,18 +2676,17 @@ export class Gameboy {
   // @return boolean => should we continue executing
   public async executeNextTick(): Promise<boolean> {
     const prevProgramCounter = this.cpu.PC;
-    const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
 
     if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
+       //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
+  
       // suspend execution until a key is pressed
+      const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
       console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
       this.debugger.showConsole();
     }
-    //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
 
     // ExecuteNextInstruction will modify the PC register appropriately
-    const prevSP = this.cpu.SP;
-    const prevPC = this.cpu.PC;
     const cycles = this.cpu.executeInstruction();
 
     if (cycles === 0) {
@@ -2706,20 +2709,12 @@ export class Gameboy {
         // conditional returns
         this.debugger.popCallAddress();
     }
-     
-    // process interrupts
-    if (this.processInterrupts()) {
-      // interrupt was invoked. Do nothing else and start executing the interrupt immediately
-      this.debugger.pushCallAddress(this.cpu.PC);
-      return true;
-    }
 
     this.ppu.step(cycles);
 
     // check if V Blank Interrupt was requested
     if (this.processInterrupts()) {
       // interrupt was invoked. Do nothing else and start executing the interrupt immediately
-      // TODO: Disable interrupts globally
       this.debugger.pushCallAddress(this.cpu.PC);
       return true;
     }
@@ -2737,7 +2732,11 @@ export class Gameboy {
 
     while (keepRunning) {
       if (this.inFrameExecutionMode) {
+        //const t0 = performance.now();
         keepRunning = await this.executeNextFrame();
+        //const t1 = performance.now();
+        //console.log(`executeNextFrame took ${t1 - t0} milliseconds.`);
+
         // pause execution. show the debug console
         if (keepRunning) {
             this.debugger.showConsole();

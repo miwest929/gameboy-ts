@@ -319,7 +319,6 @@ const ACCESSING_VRAM_CYCLES = 172;
 
 // The V-Blank interrupt occurs ca. 59.7 times a second on a handheld Game Boy. This interrupt occurs at the beginning of the V-Blank period (LY=144)
 export class PPU {
-    public buffer: number[][];
     public pixels: number[][]; // TODO: full 256x256 pixel data. Later, use (SCX, SCY) to create the actual 160x144 display.
                                //       Update to map directly to 160x144 resolution instead of using 256x256 as intermediary
 
@@ -347,9 +346,6 @@ export class PPU {
     private bus: MemoryBus;
 
     constructor() {
-        this.buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
-
-        // TODO: Temp pixel data
         this.pixels = multiDimRepeat<number>(0, 256, 256);
 
         this.vram = new Uint8Array(VRAM_SIZE_BYTES);
@@ -429,18 +425,6 @@ export class PPU {
         }
     }
 
-    public getScreenData() {
-        const buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
-        for (let i = 0; i < GB_SCREEN_HEIGHT_IN_PX; i++) {
-            for (let j = 0; j < GB_SCREEN_WIDTH_IN_PX; j++) {
-                const wrappedY = (i + this.SCROLL_Y) % 256;
-                const wrappedX = (j + this.SCROLL_X) % 256;
-                buffer[i][j] = this.pixels[wrappedY][wrappedX];
-            }
-        }
-        return buffer;
-    }
-
     public step(cycles: number) {
       if (!this.LCDC_REGISTER.isDisplayOn()) {
 		this.LY = 0;
@@ -465,7 +449,7 @@ export class PPU {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod);
 
         // perform OAM Search
-        const visibleObjects = this.performOAMSearch(this.LY);
+        //const visibleObjects = this.performOAMSearch(this.LY);
         //console.log(`OAM Search found these 10 visible objects: ${visibleObjects.join(', ')}`);
       } else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
         this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);

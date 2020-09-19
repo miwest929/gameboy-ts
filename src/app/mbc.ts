@@ -1,3 +1,5 @@
+import { displayAsHex } from './utils';
+
 const ROM_BANK_SIZE_BYTES = 0x4000;
 
 export abstract class MemoryBankController {
@@ -30,7 +32,7 @@ export class MBC0 extends MemoryBankController {
     }
 
     WriteByte(addr: number, _value: number) {
-        console.log(`ERROR: Attempt to write to address ${addr} in MBC0. This is not allowed`);
+        console.log(`ERROR: Attempt to write to address ${displayAsHex(addr)} in MBC0. This is not allowed`);
     }
 
     ReadByte(addr: number) {
