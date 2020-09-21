@@ -26,7 +26,7 @@ async function execute() {
       process.exit(1);
   }
 
-  const gameboy = new Gameboy(debugMode, readlineSync, isFrameExecution);
+  const gameboy = new Gameboy({inDebugMode: debugMode, readlineSync: readlineSync, inFrameExecutionMode: isFrameExecution});
   const cart = new Cartridge(romFilename); // second arg is for fromLocalFileSystem
   await gameboy.loadCartridge(cart);
 

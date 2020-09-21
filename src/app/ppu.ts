@@ -491,6 +491,18 @@ export class PPU {
       }
     }
 
+    public getScreenBuffer(): number[][] {
+        const buffer = multiDimRepeat<number>(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
+        for (let iy = 0; iy < GB_SCREEN_HEIGHT_IN_PX; iy++) {
+            for (let ix = 0; ix < GB_SCREEN_WIDTH_IN_PX; ix++) {
+                const y = (this.SCROLL_Y + iy) % GB_SCREEN_HEIGHT_IN_PX;
+                const x = (this.SCROLL_X + ix) % GB_SCREEN_WIDTH_IN_PX;
+                buffer[iy][ix] = this.pixels[y][x];
+            }
+        }
+        return buffer;
+    }
+
     public writeToOAM(addr: number, value: number) {
         const normalizedAddr = addr & 0x009F; // make address between 0 and 159
         this.oam[normalizedAddr] = value

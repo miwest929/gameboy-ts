@@ -183,7 +183,7 @@ export class MemoryBus {
             // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
             // Dest. address range is 0xFE00 - 0xFE9F
             //console.log("PERFORMING DMA TRANSER!");
-            this.performDMAOAMTransfer(value);
+            //this.performDMAOAMTransfer(value);
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr === 0xFF01) {
@@ -2600,6 +2600,13 @@ export class CPU {
 const ROM_BANK_0_START_ADDR = 0x0000;
 const ROM_BANK_0_END_ADDR = 0x3FFF;
 
+interface GameboyOptions {
+    inDebugMode?: boolean;
+    readlineSync?: any;
+    inFrameExecutionMode?: boolean;
+    onFrame?: any;
+}
+
 export class Gameboy {
   public cartridge: Cartridge;
   public memory: Memory;
@@ -2611,10 +2618,17 @@ export class Gameboy {
   private inDebugMode: boolean;
   private debugger: DebugConsole;
   private inFrameExecutionMode: boolean;
+  private onFrame: any
 
   private totalCpuInstructionsExecuted: number;
 
-  constructor(inDebugMode = false, readlineSync = null, inFrameExecutionMode = false) {
+  constructor(opts: GameboyOptions) {
+    const {
+        inDebugMode = false,
+        readlineSync = null,
+        inFrameExecutionMode = false,
+        onFrame = () => {}
+    } = opts;
     this.memory = new Memory();
     this.ppu = new PPU();
     this.cpu = new CPU();
@@ -2628,7 +2642,7 @@ export class Gameboy {
     }
     this.debugger = new DebugConsole(this, readlineSync);
     this.inFrameExecutionMode = inFrameExecutionMode;
-
+    this.onFrame = onFrame;
     this.totalCpuInstructionsExecuted = 0;
   }
 
@@ -2666,6 +2680,10 @@ export class Gameboy {
         const previousLY = this.ppu.LY;
         keepRunning = await this.executeNextTick();
         hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
+
+        // screen finished rendering so invoke passed in onFrame callback
+        this.onFrame(this.ppu.getScreenBuffer());
+
         instructionsExecuted++;
     }
     console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
