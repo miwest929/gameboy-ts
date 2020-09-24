@@ -42,7 +42,7 @@ async function execute() {
     if (!romFilename) {
         process.exit(1);
     }
-    const gameboy = new emulator_1.Gameboy(debugMode, readlineSync, isFrameExecution);
+    const gameboy = new emulator_1.Gameboy({ inDebugMode: debugMode, readlineSync: readlineSync, inFrameExecutionMode: isFrameExecution });
     const cart = new emulator_1.Cartridge(romFilename); // second arg is for fromLocalFileSystem
     await gameboy.loadCartridge(cart);
     console.log(cart.getRomHeaderInfo());

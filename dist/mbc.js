@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MBC1 = exports.MBC0 = exports.MemoryBankController = void 0;
+const utils_1 = require("./utils");
 const ROM_BANK_SIZE_BYTES = 0x4000;
 class MemoryBankController {
     populateROMBanks(romBytes, banksCount) {
@@ -21,7 +22,7 @@ class MBC0 extends MemoryBankController {
         this.romBytes = romBytes;
     }
     WriteByte(addr, _value) {
-        console.log(`ERROR: Attempt to write to address ${addr} in MBC0. This is not allowed`);
+        console.log(`ERROR: Attempt to write to address ${utils_1.displayAsHex(addr)} in MBC0. This is not allowed`);
     }
     ReadByte(addr) {
         if (addr > 0x7FFF) {

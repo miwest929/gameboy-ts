@@ -258,8 +258,6 @@ const ACCESSING_VRAM_CYCLES = 172;
 // The V-Blank interrupt occurs ca. 59.7 times a second on a handheld Game Boy. This interrupt occurs at the beginning of the V-Blank period (LY=144)
 class PPU {
     constructor() {
-        this.buffer = utils_1.multiDimRepeat(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
-        // TODO: Temp pixel data
         this.pixels = utils_1.multiDimRepeat(0, 256, 256);
         this.vram = new Uint8Array(exports.VRAM_SIZE_BYTES);
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
@@ -356,17 +354,6 @@ class PPU {
             console.error(`Don't support reading to special reg at addr ${addr}`);
         }
     }
-    getScreenData() {
-        const buffer = utils_1.multiDimRepeat(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
-        for (let i = 0; i < GB_SCREEN_HEIGHT_IN_PX; i++) {
-            for (let j = 0; j < GB_SCREEN_WIDTH_IN_PX; j++) {
-                const wrappedY = (i + this.SCROLL_Y) % 256;
-                const wrappedX = (j + this.SCROLL_X) % 256;
-                buffer[i][j] = this.pixels[wrappedY][wrappedX];
-            }
-        }
-        return buffer;
-    }
     step(cycles) {
         if (!this.LCDC_REGISTER.isDisplayOn()) {
             this.LY = 0;
@@ -392,7 +379,7 @@ class PPU {
             // But accessing VRAM during this mode is alright.
             this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingOAMPeriod);
             // perform OAM Search
-            const visibleObjects = this.performOAMSearch(this.LY);
+            //const visibleObjects = this.performOAMSearch(this.LY);
             //console.log(`OAM Search found these 10 visible objects: ${visibleObjects.join(', ')}`);
         }
         else if (this.clock >= ONE_LINE_SCAN_AND_BLANK_CYCLES - ACCESSING_OAM_CYCLES - ACCESSING_VRAM_CYCLES) {
@@ -430,6 +417,17 @@ class PPU {
                 }
             }
         }
+    }
+    getScreenBuffer() {
+        const buffer = utils_1.multiDimRepeat(0, GB_SCREEN_HEIGHT_IN_PX, GB_SCREEN_WIDTH_IN_PX);
+        for (let iy = 0; iy < GB_SCREEN_HEIGHT_IN_PX; iy++) {
+            for (let ix = 0; ix < GB_SCREEN_WIDTH_IN_PX; ix++) {
+                const y = (this.SCROLL_Y + iy) % 256;
+                const x = (this.SCROLL_X + ix) % 256;
+                buffer[iy][ix] = this.pixels[y][x];
+            }
+        }
+        return buffer;
     }
     writeToOAM(addr, value) {
         const normalizedAddr = addr & 0x009F; // make address between 0 and 159

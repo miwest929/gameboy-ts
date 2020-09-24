@@ -6,6 +6,7 @@ const utils_1 = require("./utils");
 const ppu_1 = require("./ppu");
 const mbc_1 = require("./mbc");
 const debugger_console_1 = require("./debugger_console");
+//import { performance } from 'perf_hooks';
 /*
 References:
   - https://www.reddit.com/r/Gameboy/comments/29o7rx/what_does_dmg_mean/
@@ -154,7 +155,7 @@ class MemoryBus {
             // Source address range is 0xXX00 - 0xXX9F (where XX is the written byte value)
             // Dest. address range is 0xFE00 - 0xFE9F
             //console.log("PERFORMING DMA TRANSER!");
-            this.performDMAOAMTransfer(value);
+            //this.performDMAOAMTransfer(value);
         }
         else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
@@ -2808,7 +2809,8 @@ exports.CPU = CPU;
 const ROM_BANK_0_START_ADDR = 0x0000;
 const ROM_BANK_0_END_ADDR = 0x3FFF;
 class Gameboy {
-    constructor(inDebugMode = false, readlineSync = null, inFrameExecutionMode = false) {
+    constructor(opts) {
+        const { inDebugMode = false, readlineSync = null, inFrameExecutionMode = false, onFrame = () => { } } = opts;
         this.memory = new Memory();
         this.ppu = new ppu_1.PPU();
         this.cpu = new CPU();
@@ -2821,6 +2823,7 @@ class Gameboy {
         }
         this.debugger = new debugger_console_1.DebugConsole(this, readlineSync);
         this.inFrameExecutionMode = inFrameExecutionMode;
+        this.onFrame = onFrame;
         this.totalCpuInstructionsExecuted = 0;
     }
     powerOn() {
@@ -2846,27 +2849,29 @@ class Gameboy {
         let keepRunning = true;
         // LY === 144 indicates VBLANK. VBLANK means that the screen just finished rendering pixels to the screen
         let hasFinishedFrame = false;
+        let instructionsExecuted = 0;
         while (keepRunning && !hasFinishedFrame) {
             const previousLY = this.ppu.LY;
             keepRunning = await this.executeNextTick();
             hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
+            // screen finished rendering so invoke passed in onFrame callback
+            this.onFrame(this.ppu.getScreenBuffer());
+            instructionsExecuted++;
         }
-        console.log("Finished executing next frame");
+        console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
         return keepRunning;
     }
     // @return boolean => should we continue executing
     async executeNextTick() {
         const prevProgramCounter = this.cpu.PC;
-        const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
         if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
+            //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
             // suspend execution until a key is pressed
+            const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
             console.log(`* [${utils_1.displayAsHex(prevProgramCounter)}]: ${disassembled}`);
             this.debugger.showConsole();
         }
-        //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
         // ExecuteNextInstruction will modify the PC register appropriately
-        const prevSP = this.cpu.SP;
-        const prevPC = this.cpu.PC;
         const cycles = this.cpu.executeInstruction();
         if (cycles === 0) {
             console.log(`Executed total of ${this.totalCpuInstructionsExecuted} instructions`);
@@ -2888,17 +2893,10 @@ class Gameboy {
             // conditional returns
             this.debugger.popCallAddress();
         }
-        // process interrupts
-        if (this.processInterrupts()) {
-            // interrupt was invoked. Do nothing else and start executing the interrupt immediately
-            this.debugger.pushCallAddress(this.cpu.PC);
-            return true;
-        }
         this.ppu.step(cycles);
         // check if V Blank Interrupt was requested
         if (this.processInterrupts()) {
             // interrupt was invoked. Do nothing else and start executing the interrupt immediately
-            // TODO: Disable interrupts globally
             this.debugger.pushCallAddress(this.cpu.PC);
             return true;
         }
@@ -2912,7 +2910,10 @@ class Gameboy {
         this.totalCpuInstructionsExecuted = 0;
         while (keepRunning) {
             if (this.inFrameExecutionMode) {
+                //const t0 = performance.now();
                 keepRunning = await this.executeNextFrame();
+                //const t1 = performance.now();
+                //console.log(`executeNextFrame took ${t1 - t0} milliseconds.`);
                 // pause execution. show the debug console
                 if (keepRunning) {
                     this.debugger.showConsole();
