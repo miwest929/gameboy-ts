@@ -239,12 +239,22 @@ export class DebugConsole {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
                 this.displayMemoryAddressValue(addr);
-            } else if (command === "setbp" || command === "setbreakpoint") {
-                console.log("SETTING A BREAKPOINT");
+            } else if (command.startsWith("setbp") || command.startsWith("setbreakpoint")) {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
                 this.breakpoints.push(new AddressBreakpoint(addr));
                 console.log(`Set new breakpoint at address 0x${displayAsHex(addr)}`);
+            } else if (command.startsWith("delbp") || command.startsWith("removebreakpoint")) {
+                const args = command.split(' ').slice(1);
+                const addr = parseInt(args[0], 16);
+                const idx = this.breakpoints.findIndex((bp) => { return (bp as AddressBreakpoint).address === addr; });
+                if (idx !== -1) {
+                    this.breakpoints.splice(idx, 1);
+                    console.log(`Remove address breakpoint at address ${displayAsHex(addr)}`);
+                }
+            } else if (command === "empty" || command === "removeallbreakpoints") {
+                this.breakpoints = [];
+                console.log("Removed all breakpoints");
             } else if (command === "listbp") {
                 console.log("Following are the Address breakpoints:");
                 const addressBps = this.breakpoints.filter((bp) => bp.constructor.name === 'AddressBreakpoint');

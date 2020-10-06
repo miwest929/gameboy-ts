@@ -3,6 +3,14 @@ import { uInt8ArrayToUtf8, displayAsHex } from './utils';
 import { PPU, Address } from './ppu';
 import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
+
+/*
+TODO:
+  In order to hookthe backend (this repo) with its frontend (gameboy-ts-web) this file needs to be
+  loadable into a browser context. However, "perf_hooks" library only exists in Node. In the browser,
+  performance is referenced with 'window.performance'. We need to conditionally perform this import.
+  Haven't figured out how to properly do that. 
+*/
 //import { performance } from 'perf_hooks';
 
 /*
@@ -394,7 +402,19 @@ export class CPU {
     // decrement the H portion of HL register by 1
     public decrementH() {
       const result = wrappingByteSub(this.H(), 1);
+      this.updateSubHalfCarryFlag(this.H(), 1);
       this.updateH(result[0]);
+      this.setFlag(SUBTRACTION_FLAG);
+      this.updateZeroFlag(this.H());
+      
+    }
+
+    public incrementH() {
+        const result = wrappingByteAdd(this.H(), 1);
+        this.updateHalfCarryFlag(this.H(), 1);
+        this.updateH(result[0]);
+        this.updateZeroFlag(this.H());
+        this.clearFlag(SUBTRACTION_FLAG);
     }
 
     public updateH(value: number) {
@@ -442,7 +462,7 @@ export class CPU {
         const result = wrappingByteSub(val1, val2 + carryVal);
         this.updateSubHalfCarryFlag(val1, val2);
         this.setFlag(SUBTRACTION_FLAG);
-        this.clearFlag(ZERO_FLAG);
+        this.updateZeroFlag(result[0]);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
         return result[0];
     }
@@ -458,7 +478,6 @@ export class CPU {
         this.D = result[0] >> 8;
         this.E = result[0] & 0x00FF;
     }
-
 
     public getFlag(flag: number): boolean {
         if (flag === SUBTRACTION_FLAG) {
@@ -608,15 +627,17 @@ export class CPU {
     
     // READ-ONLY. Just reads the next instruction and disassemblies it as a string
     // This does not execute the instruction. Just returns it as string.
-    // TODO: Setting the lastExecutedOpCode value is a side effect. Only used by the debugger so we can
-    //       break on specific opcode. High coupling.
     // TODO: Now that we separated printing from executing instruction. We have shotgun surgory situation.
     //       Adding a new instruction requires modifying this method and the 'executeNextInstruction' method.
     //       The way around this is for each instruction to be its own class that includes execution AND disassembly.
     //       Since that would be a gigantic refactoring, hold off doing it until the emulator is working
-    public disassembleNextInstruction(): string {
-        const op = this.bus.readByte(this.PC);
-        this.lastExecutedOpCode = op;
+    public disassembleNextInstruction(op: number): string {
+        // const oneByteInstr = {
+        //     0x00: 'NOP',
+        //     0xAF: 'XOR A',
+        //     0x32: 'LD (HL-), A', 
+        //     0x05: 'DEC B'
+        // }
 
     	if (op === 0x31) {
             const lsb = this.bus.readByte(this.PC + 1);
@@ -1006,9 +1027,11 @@ export class CPU {
         } else if (op === 0x38) {
             const value = this.bus.readByte(this.PC + 1);
             return `JR C, ${displayAsHex(value)}`;
-        } else if (op === 0xCB) {
-            let nextInstrByte = this.bus.readByte(this.PC + 1);
-            this.lastExecutedOpCode = (this.lastExecutedOpCode << 8) | nextInstrByte;
+        } else if (op === 0x30) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `JR NC, ${value}`;
+        } else if ((op & 0xFF00) === 0xCB00) {
+            let nextInstrByte = op & 0x00FF;
             switch (nextInstrByte) {
             case 0x37:
                 return 'SWAP A';
@@ -1224,10 +1247,6 @@ export class CPU {
         } else if (op === 0x25) {
             // DEC H
             this.decrementH();
-            this.updateSubHalfCarryFlag(this.H(), 1);
-            this.setFlag(SUBTRACTION_FLAG);
-            this.updateZeroFlag(this.H());
-
             this.PC++;
             return 4;
         } else if (op === 0x15) {
@@ -1920,7 +1939,7 @@ export class CPU {
             return 8;
         } else if (op === 0x24) {
             // 'INC H';
-            console.log('INC H not implemented yet');
+            this.incrementH();
             this.PC++;
             return 4;
         } else if (op === 0x56) {
@@ -2255,13 +2274,27 @@ export class CPU {
             this.PC += 2;
             return 8;
         } else if (op === 0x38) {
-
+            // JR C,r8
             const value = this.bus.readByte(this.PC + 1);
             const offset = makeSigned(value, 1);
             this.PC += 2; // move to next instruction then add offset
-            //const addr = this.PC + offset;
-            this.PC += offset;
+            if (this.getFlag(CARRY_FLAG)) {
+              this.PC += offset;
+              return 12;
+            }
 
+            return 8;
+        } else if (op === 0x30) {
+            // JR NC, r8
+            const value = this.bus.readByte(this.PC + 1);
+            const offset = makeSigned(value, 1);
+            this.PC += 2;
+            if (!this.getFlag(CARRY_FLAG)) {
+              this.PC += offset;
+              return 12;
+            }
+
+            return 8;
         } else if (op === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2432,6 +2465,8 @@ export class CPU {
                     this.setFlag(CARRY_FLAG);
                 }
 
+                this.clearFlag(SUBTRACTION_FLAG);
+
                 this.PC += 2;
                 return 8;
             case 0x19:
@@ -2490,10 +2525,12 @@ export class CPU {
         // 1001 1010
         // 0011 010[0] | [1]
         const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
-        const msb = (value & 0x80) === 0x80 ? 0x1 : 0x0;
-        this.Flags.carryFlag = msb === 0x1 ? true : false;
-        const updated = (value >>> 1) | currCarry;
+        const newCarryValue = (value & 0x01) === 0x01 ? true : false;
+        this.Flags.carryFlag = newCarryValue ? true : false;
+        const updated = (value >>> 1) ^ currCarry;
         this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
         return updated;
     }
 
@@ -2691,15 +2728,26 @@ export class Gameboy {
     return keepRunning;
   }
 
+  private readNextOpCode() {
+    const op = this.bus.readByte(this.cpu.PC);
+    if (op === 0xCB) {
+        const nextByte = this.bus.readByte(this.cpu.PC + 1);
+        return (op << 8) | nextByte;
+    }
+    return op;
+  }
+
   // @return boolean => should we continue executing
   public async executeNextTick(): Promise<boolean> {
     const prevProgramCounter = this.cpu.PC;
 
     if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
-       //console.log(`[${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
-  
       // suspend execution until a key is pressed
-      const disassembled = this.cpu.disassembleNextInstruction() || "<unknown>";
+
+      const op = this.readNextOpCode();
+      console.log(`nextOpCode = ${displayAsHex(op)}`);
+      this.cpu.lastExecutedOpCode = op;
+      const disassembled = this.cpu.disassembleNextInstruction(op) || "<unknown>";
       console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
       this.debugger.showConsole();
     }
