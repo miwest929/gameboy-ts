@@ -417,11 +417,19 @@ export class CPU {
         this.clearFlag(SUBTRACTION_FLAG);
     }
 
+    public incrementL() {
+        const result = wrappingByteAdd(this.L(), 1);
+        this.updateHalfCarryFlag(this.L(), 1);
+        this.updateL(result[0]);
+        this.updateZeroFlag(this.L());
+        this.clearFlag(SUBTRACTION_FLAG);
+    }
+
     public updateH(value: number) {
         this.HL = (value << 8) | this.L();
     }
 
-    // decrement the H portion of HL register by 1
+    // decrement the L portion of HL register by 1
     public decrementL() {
         const result = wrappingByteSub(this.L(), 1);
         this.updateL(result[0]);
@@ -430,7 +438,6 @@ export class CPU {
     public updateL(value: number) {
         this.HL = (this.H() << 8) | value;
     }
-  
 
     public L(): number {
         return this.HL & 0x00FF;
@@ -455,6 +462,7 @@ export class CPU {
         this.updateHalfCarryFlag(val1, val2);
         this.clearFlag(SUBTRACTION_FLAG);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
+        this.updateZeroFlag(result[0]);
         return result[0];
     }
 
@@ -477,6 +485,11 @@ export class CPU {
         const result = wrappingTwoByteAdd(this.DE(), 1);
         this.D = result[0] >> 8;
         this.E = result[0] & 0x00FF;
+    }
+
+    public incrementHL() {
+        const result = wrappingTwoByteAdd(this.HL, 1);
+        this.HL = result[0];
     }
 
     public getFlag(flag: number): boolean {
@@ -624,6 +637,53 @@ export class CPU {
 
         return wasInterruptInvoked;
     }
+
+    // private getRegisterValueInvolved(op: number): number {
+    // }
+
+    private getRegisterValueInvolved(op: number): number {
+        const valueMap = {
+            0x0: this.B,
+            0x1: this.C,
+            0x2: this.D,
+            0x3: this.E,
+            0x4: this.H(),
+            0x5: this.L(),
+            0x6: this.bus.readByte(this.HL),
+            0x7: this.A,
+            0x8: this.B,
+            0x9: this.C,
+            0xA: this.D,
+            0xB: this.E,
+            0xC: this.H(),
+            0xD: this.L(),
+            0xE: this.bus.readByte(this.HL),
+            0xF: this.A
+          };
+          return valueMap[op & 0x0F];        
+    }
+
+    private getRegisterNameInvolved(op: number): string {
+        const valueMap = {
+          0x0: 'B',
+          0x1: 'C',
+          0x2: 'D',
+          0x3: 'E',
+          0x4: 'H',
+          0x5: 'L',
+          0x6: '(HL)',
+          0x7: 'A',
+          0x8: 'B',
+          0x9: 'C',
+          0xA: 'D',
+          0xB: 'E',
+          0xC: 'H',
+          0xD: 'L',
+          0xE: '(HL)',
+          0xF: 'A'
+        };
+        return valueMap[op & 0x0F];
+    }
     
     // READ-ONLY. Just reads the next instruction and disassemblies it as a string
     // This does not execute the instruction. Just returns it as string.
@@ -638,7 +698,15 @@ export class CPU {
         //     0x32: 'LD (HL-), A', 
         //     0x05: 'DEC B'
         // }
-
+        const twoByteInstr = {
+            0xF6: (value) => `OR ${value}`,
+            0x1E: (addr) => `LD E, ${addr}`
+        };
+        if (twoByteInstr[op]) {
+          const value = this.bus.readByte(this.PC + 1);
+          return twoByteInstr[op](value);
+        }
+       
     	if (op === 0x31) {
             const lsb = this.bus.readByte(this.PC + 1);
             const msb = this.bus.readByte(this.PC + 2);
@@ -835,14 +903,14 @@ export class CPU {
             return 'POP HL';
         } else if (op === 0xF1) {
             return 'POP AF';
-        } else if (op === 0x3C) {
-            return 'INC A';
-        } else if (op === 0x2C) {
-            return 'INC L';
-        } else if (op === 0x1C) {
-            return 'INC E';
-        } else if (op === 0x34) {
-            return 'INC (HL)';
+        // } else if (op === 0x3C) {
+        //     return 'INC A';
+        // } else if (op === 0x2C) {
+        //     return 'INC L';
+        // } else if (op === 0x1C) {
+        //     return 'INC E';
+        // } else if (op === 0x34) {
+        //     return 'INC (HL)';
         } else if (op === 0x2F) {
             return 'CPL';
         } else if (op === 0xE6) {
@@ -897,10 +965,10 @@ export class CPU {
             return 'LD E, C';
         } else if (op === 0x58) {
             return 'LD E, B';
-        } else if (op === 0x23) {
-            return 'INC HL';
-        } else if (op === 0x24) {
-            return 'INC H';
+        // } else if (op === 0x23) {
+        //     return 'INC HL';
+        // } else if (op === 0x24) {
+        //     return 'INC H';
         } else if (op === 0x56) {
             return 'LD D, (HL)';
         } else if (op === 0x57) {
@@ -919,8 +987,8 @@ export class CPU {
             return 'LD D, B';
         } else if (op === 0xE9) {
             return 'JP (HL)';
-        } else if (op === 0x13) {
-            return 'INC DE';
+        // } else if (op === 0x13) {
+        //     return 'INC DE';
         } else if (op === 0x1A) {
             return 'LD A, (DE)';
         } else if (op === 0x22) {
@@ -937,8 +1005,8 @@ export class CPU {
             return 'LD H, B';
         } else if (op === 0x0A) {
             return 'LD A, (BC)';
-        } else if (op === 0x03) {
-            return 'INC BC';
+        // } else if (op === 0x03) {
+        //     return 'INC BC';
         } else if (op === 0x80) {
             return 'ADD A, B';
         } else if (op === 0x81) {
@@ -999,10 +1067,6 @@ export class CPU {
             return 'LD A, D';
         } else if (op === 0x7D) {
             return 'LD A, L';
-        } else if (op === 0x70) {
-            return 'LD (HL), B';
-        } else if (op === 0x71) {
-            return 'LD (HL), C';
         } else if (op === 0xC2) {
             const addr = this.readTwoByteValue(this.PC + 1);
             return `JP NZ, ${addr}`;
@@ -1030,6 +1094,65 @@ export class CPU {
         } else if (op === 0x30) {
             const value = this.bus.readByte(this.PC + 1);
             return `JR NC, ${value}`;
+        } else if (op >= 0x70 && op <= 0x75 || op === 0x77) {
+            // LD (HL), n
+            const valueMap = {
+                0x70: 'B',
+                0x71: 'C',
+                0x72: 'D',
+                0x73: 'E',
+                0x74: 'H',
+                0x75: 'L',
+                0x77: 'A'
+            }
+            return `LD (HL), ${valueMap[op]}`;
+        } else if (op === 0xF9) {
+            return 'LD SP, HL';
+        } else if (op === 0xCE) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `ADC A, ${value}`;
+        } else if (op >= 0xB0 && op <= 0xB7) {
+            // OR n
+            const valueMap = {
+                0xB0: 'B',
+                0xB1: 'C',
+                0xB2: 'D',
+                0xB3: 'E',
+                0xB4: 'H',
+                0xB5: 'L',
+                0xB6: '(HL)',
+                0xB7: 'A'
+            }
+            return `OR ${valueMap[op]}`;
+        } else if ([0x03, 0x04, 0x0C, 0x13, 0x14, 0x1C, 0x23, 0x24, 0x2C, 0x33, 0x34, 0x3C].includes(op)) {
+            const valueMap = {
+                0x03: 'INC BC',
+                0x04: 'INC B',
+                0x0C: 'INC C',
+                0x13: 'INC DE',
+                0x14: 'INC D',
+                0x1C: 'INC E',
+                0x23: 'INC HL',
+                0x24: 'INC H',
+                0x2C: 'INC L',
+                0x33: 'INC SP',
+                0x34: 'INC (HL)',
+                0x3C: 'INC A'
+            };
+            return valueMap[op];
+        } else if (op >= 0x90 && op <= 0x97 || op === 0xD6) {
+            if (op === 0xD6) {
+                return `SUB ${this.bus.readByte(this.PC + 1)}`;
+            } 
+            
+            return `SUB ${this.getRegisterNameInvolved(op)}`;
+        } else if (op === 0xF8) {
+            const value = this.bus.readByte(this.PC + 1);
+            return `LD HL, SP + ${value}`;
+        } else if (op >= 0xB8 && op <= 0xBF) {
+            return `CP ${this.getRegisterNameInvolved(op)}`;
+        } else if (op === 0x27) {
+            return 'DAA';
         } else if ((op & 0xFF00) === 0xCB00) {
             let nextInstrByte = op & 0x00FF;
             switch (nextInstrByte) {
@@ -1105,6 +1228,28 @@ export class CPU {
                 return 'RR (HL)';
             case 0x1F:
                 return 'RR A';
+            case 0x38:
+            case 0x39:
+            case 0x39:
+            case 0x3A:
+            case 0x3B:
+            case 0x3C:
+            case 0x3D:
+            case 0x3E:
+            case 0x3F:
+                // SRL n
+                const valueMap = {
+                    0x8: "B",
+                    0x9: "C",
+                    0xA: "D",
+                    0xB: "E",
+                    0xC: "C",
+                    0xD: "D",
+                    0xE: "(HL)",
+                    0xF: "A"
+                };
+                const disassem = `SRL ${valueMap[nextInstrByte&0x0F]}`;
+                return disassem
             default:
                 return '<unknown>';
             }
@@ -1176,7 +1321,6 @@ export class CPU {
         } else if (op === 0x05) {
             // DEC B
             const result = wrappingByteSub(this.B, 1);
-            this.updateSubHalfCarryFlag(this.B, 1);
             this.B = result[0];
             this.setFlag(SUBTRACTION_FLAG);
         
@@ -1267,18 +1411,6 @@ export class CPU {
             this.updateZeroFlagAndClearOthers();
             this.PC++;
             return 4;
-        } else if (op === 0x14) {
-            // INC D
-            let result = wrappingByteAdd(this.D, 1);
-            // check for half-carry
-            this.updateHalfCarryFlag(this.D, 1);
-            this.D = result[0]; 
-            
-            this.updateZeroFlag(this.D);
-            this.clearFlag(SUBTRACTION_FLAG);
-
-            this.PC++;
-            return 4;
         } else if (op === 0x7B) {
             // LD A, E
             this.A = this.E;
@@ -1295,7 +1427,7 @@ export class CPU {
             this.PC++;
             return 4;
         } else if (op === 0x29) {
-            // ADD HL,HL
+            // ADD HL, HL
             const result = wrappingTwoByteAdd(this.HL, this.HL);
             this.updateHalfCarryFlag(this.HL, this.HL);
             this.HL = result[0];
@@ -1339,15 +1471,6 @@ export class CPU {
 
             this.PC++;
             return 8;
-        } else if (op === 0x0C) {
-            // INC C
-            const result = wrappingByteAdd(this.C, 1);
-            this.updateHalfCarryFlag(this.C, 1);
-            this.C = result[0];
-            this.clearFlag(SUBTRACTION_FLAG);
-            this.clearFlag(CARRY_FLAG);
-            this.PC++;
-            return 4;
         } else if (op === 0xD2) {
             // JP NC, a16
             let lsb = this.bus.readByte(this.PC + 1);
@@ -1734,47 +1857,6 @@ export class CPU {
             this.A = this.stackPop();
             this.PC++;
             return 12;
-        } else if (op === 0x3C) {
-            // INC A
-            const [result,] = wrappingByteAdd(this.A, 1);
-            this.updateHalfCarryFlag(this.A, 1);
-            this.A = result;
-            this.updateZeroFlag(this.A);
-            this.clearFlag(SUBTRACTION_FLAG);
-            
-            this.PC++;
-            return 4;
-        } else if (op === 0x2C) {
-            // INC L
-            const [result,] = wrappingByteAdd(this.L(), 1);
-            this.updateHalfCarryFlag(this.L(), 1);
-            this.HL = (this.HL & 0xFF00) | result;
-            this.updateZeroFlag(result);
-            this.clearFlag(SUBTRACTION_FLAG);
-
-            this.PC++;
-            return 4;
-        } else if (op === 0x1C) {
-            // INC E
-            const [result,] = wrappingByteAdd(this.E, 1);
-            this.updateHalfCarryFlag(this.E, 1);
-            this.E = result;
-            this.updateZeroFlag(this.E);
-            this.clearFlag(SUBTRACTION_FLAG);
-
-            this.PC++;
-            return 4;
-        } else if (op === 0x34) {
-            // INC (HL)
-            const value = this.bus.readByte(this.HL);
-            const [result,] = wrappingTwoByteAdd(value, 1);
-            this.updateHalfCarryFlag(value, 1);
-            this.bus.writeByte(this.HL, result);
-            this.updateZeroFlag(result);
-            this.clearFlag(SUBTRACTION_FLAG);
-
-            this.PC++;
-            return 12;
         } else if (op === 0x2F) {
           // CPL   [complement A]
           this.A = bitNegation(this.A);
@@ -1789,8 +1871,8 @@ export class CPU {
           this.A = originalA & value;
           this.updateZeroFlag(this.A);
           this.clearFlag(SUBTRACTION_FLAG);
-          this.updateSubHalfCarryFlag(this.A, originalA);
-          this.clearFlag(CARRY_FLAG); // TODO: ONLY SET WHEN LAST BIT OF VALUE IS 0
+          this.setFlag(HALF_CARRY_FLAG);
+          this.clearFlag(CARRY_FLAG);
 
           this.PC += 2;
           return 8;
@@ -1931,17 +2013,6 @@ export class CPU {
             this.E = this.B;
             this.PC++;
             return 4;
-        } else if (op === 0x23) {
-            // 'INC HL';
-            const [result,] = wrappingTwoByteAdd(this.HL, 1);
-            this.HL = result;
-            this.PC++;
-            return 8;
-        } else if (op === 0x24) {
-            // 'INC H';
-            this.incrementH();
-            this.PC++;
-            return 4;
         } else if (op === 0x56) {
             // LD D, (HL)
             this.D = this.bus.readByte(this.HL);
@@ -1986,11 +2057,6 @@ export class CPU {
             // 'JP (HL)';
             this.PC = this.HL;
             return 4;
-        } else if (op === 0x13) {
-            // INC DE
-            this.incrementDE();
-            this.PC++;
-            return 8;
         } else if (op === 0x1A) {
             // LD A, (DE)
             this.A = this.bus.readByte(this.DE());
@@ -2046,11 +2112,6 @@ export class CPU {
         } else if (op === 0x0A) {
             // 'LD A, (BC)';
             this.A = this.bus.readByte(this.BC());
-            this.PC++;
-            return 8;
-        } else if (op === 0x03) {
-            // INC BC
-            this.incrementBC();
             this.PC++;
             return 8;
         } else if (op === 0x80) {
@@ -2221,16 +2282,6 @@ export class CPU {
             this.A = this.L();
             this.PC++;
             return 4;
-        } else if (op === 0x70) {
-            // 'LD (HL), B';
-            this.bus.writeByte(this.HL, this.B);
-            this.PC++;
-            return 8;
-        } else if (op === 0x71) {
-            // 'LD (HL), C';
-            this.bus.writeByte(this.HL, this.C);
-            this.PC++;
-            return 8;
         } else if (op === 0xC6) {
             // ADD A, d8
             const value = this.bus.readByte(this.PC + 1);
@@ -2248,6 +2299,10 @@ export class CPU {
             // CALL NZ, a16
             const addr = this.readTwoByteValue(this.PC + 1);
             if (!this.Flags.zeroFlag) {
+                const [higherByte, lowerByte] = this.split16BitValueIntoTwoBytes(this.PC + 3);
+                this.stackPush(higherByte);
+                this.stackPush(lowerByte);     
+            
                 this.PC = addr;
                 return 24;
             }
@@ -2295,6 +2350,188 @@ export class CPU {
             }
 
             return 8;
+        } else if ((op >= 0x70 && op <= 0x75) || op === 0x77) {
+            // LD (HL), n
+
+            const valueMap = {
+                0x70: this.B,
+                0x71: this.C,
+                0x72: this.D,
+                0x73: this.E,
+                0x74: this.H(),
+                0x75: this.L(),
+                0x77: this.A
+            }
+            this.bus.writeByte(this.HL, valueMap[op]);
+            this.PC += 1;
+            return 8;
+        } else if (op === 0xF9) {
+          // LD SP, HL
+          this.SP = this.HL
+          this.PC++;
+          return 8;
+        } else if (op === 0xCE) {
+            // ADC A, d8
+            const value = this.bus.readByte(this.PC + 1);
+            const carryValue = this.getFlag(CARRY_FLAG) ? 0x01 : 0x00;
+            this.A = this.addOneByte(this.A, value, carryValue);
+            this.PC += 2;
+            return 8;
+        } else if (op >= 0xB0 && op <= 0xB7) {
+            // OR n
+            const valueMap = {
+                0x0: this.B,
+                0x1: this.C,
+                0x2: this.D,
+                0x3: this.E,
+                0x4: this.H(),
+                0x5: this.L(),
+                0x6: this.bus.readByte(this.HL),
+                0x7: this.A
+            }
+            this.A = this.A | valueMap[op&0x0F];
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0x1E) {
+            // LD E, d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.E = value;
+            this.PC += 2;
+            return 8;
+        } else if (op === 0xF6) {
+            // OR d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.executeOr(value);
+            this.PC += 2;
+            return 8;
+        } else if ([0x03, 0x04, 0x0C, 0x13, 0x14, 0x1C, 0x23, 0x24, 0x2C, 0x33, 0x34, 0x3C].includes(op)) {
+            const opMap = {
+              0x03: () => this.incrementBC(),
+              0x04: () => {
+                const result = wrappingByteAdd(this.B, 1);
+                this.updateHalfCarryFlag(this.B, 1);
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.updateZeroFlag(result[0]);
+                this.B = result[0];
+              },
+              0x0C: () => {
+                const result = wrappingByteAdd(this.C, 1);
+                this.updateHalfCarryFlag(this.C, 1);
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.updateZeroFlag(result[0]);
+                this.C = result[0];
+              },
+              0x13: () => this.incrementDE(),
+              0x23: () => this.incrementHL(),
+              0x33: () => this.SP++,
+              0x14: () => {
+                const result = wrappingByteAdd(this.D, 1);
+                this.updateHalfCarryFlag(this.D, 1);
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.updateZeroFlag(result[0]);
+                this.D = result[0];
+              },
+              0x1C: () => {
+                const [result,] = wrappingByteAdd(this.E, 1);
+                this.updateHalfCarryFlag(this.E, 1);
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.updateZeroFlag(result);
+                this.E = result;         
+              },
+              0x24: () => this.incrementH(),
+              0x2C: () => this.incrementL(),
+              0x34: () => {
+                  const value = this.bus.readByte(this.HL);
+                  const [result,] = wrappingByteAdd(value, 1);
+                  this.updateHalfCarryFlag(result, 1);
+                  this.clearFlag(SUBTRACTION_FLAG);
+                  this.updateZeroFlag(result);
+                  this.bus.writeByte(this.HL, result);
+              },
+              0x3C: () => {
+                const result = wrappingByteAdd(this.A, 1);
+                this.updateHalfCarryFlag(this.A, 1);
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.updateZeroFlag(result[0]);
+                this.A = result[0];                   
+              }
+            };
+
+            if (opMap[op]) {
+                opMap[op]();
+            }
+
+            this.PC++;
+
+            if (op === 0x34) {
+                return 12;
+            }
+            return [0x03, 0x13, 0x23].includes[op] ? 8 : 4;
+        } else if (op >= 0x90 && op <= 0x97 || op === 0xD6) {
+            // SUB n
+            // Subtract n from A
+
+            if (op === 0xD6) {
+                const value = this.bus.readByte(this.PC + 1);
+                this.A = this.subOneByte(this.A, value);
+                this.PC += 2;
+                return 8;
+            }
+
+            if (op === 0x96) {
+                const value = this.bus.readByte(this.HL);
+                this.A = this.subOneByte(this.A, value);
+                this.PC++;
+                return 8;
+            }
+
+            const opMap = {
+                0x90: () => { return this.subOneByte(this.A, this.B); },
+                0x91: () => { return this.subOneByte(this.A, this.C); },
+                0x92: () => { return this.subOneByte(this.A, this.D); },
+                0x93: () => { return this.subOneByte(this.A, this.E); },
+                0x94: () => { return this.subOneByte(this.A, this.H()); },
+                0x95: () => { return this.subOneByte(this.A, this.L()); }
+            }
+
+            this.A = opMap[op]();
+
+            this.PC++;
+            return 4;
+        } else if (op === 0xF8) {
+            // `LD HL, SP + ${value}`;
+            // TODO: half-carry AND carry flags might not be setting correctly
+            const value = this.bus.readByte(this.PC + 1);
+            const result = wrappingTwoByteAdd(this.SP, value);
+            this.updateHalfCarryFlag(this.SP, value);
+
+            this.clearFlag(CARRY_FLAG);
+            if (result[1]) {
+                this.setFlag(CARRY_FLAG);
+            }
+            this.HL = result[0];
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.clearFlag(ZERO_FLAG);
+            this.PC += 2;
+            return 12;
+        } else if (op >= 0xB8 && op <= 0xBF) {
+            // Compare A with n. This is basically an A - n subtraction instruction but the results are thrown away.
+            // CP d8
+            const value = this.getRegisterValueInvolved(op);
+            let result = wrappingByteSub(this.A, value);
+            this.updateZeroFlag(result[0]);
+            this.setFlag(SUBTRACTION_FLAG);
+            this.updateSubHalfCarryFlag(this.A, value);
+            result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
+
+            this.PC++;
+            return op === 0xBE ? 8 : 4;
+        } else if (op === 0x27) {
+            // DAA
+            this.daaInstruction();
+            this.PC++;
+            return 4;
         } else if (op === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2451,24 +2688,6 @@ export class CPU {
                 this.updateZeroFlagWithBit(this.A, 2);
                 this.PC += 2;
                 return 8;
-            case 0x38:
-                // SRL B
-                // Shift n right into Carry. MSB set to 0.
-                let shouldSetCarryFlag = false;
-                if ((this.B & 0x01) === 0x01) {
-                  shouldSetCarryFlag = true;
-                }
-
-                this.B = this.B >> 1;
-                this.clearFlag(CARRY_FLAG);
-                if (shouldSetCarryFlag) {
-                    this.setFlag(CARRY_FLAG);
-                }
-
-                this.clearFlag(SUBTRACTION_FLAG);
-
-                this.PC += 2;
-                return 8;
             case 0x19:
                 // 'RR C';
                 // Rotate n right through Carry flag.
@@ -2511,6 +2730,55 @@ export class CPU {
                 this.A = this.rotateRightThroughCarry(this.A);
                 this.PC += 2;
                 return 8;
+            case 0x38:
+            case 0x39:
+            case 0x39:
+            case 0x3A:
+            case 0x3B:
+            case 0x3C:
+            case 0x3D:
+            case 0x3E:
+            case 0x3F:
+                // SRL n
+                const valueMap = {
+                    0x8: this.B,
+                    0x9: this.C,
+                    0xA: this.D,
+                    0xB: this.E,
+                    0xC: this.C,
+                    0xD: this.D,
+                    0xE: this.bus.readByte(this.HL),
+                    0xF: this.A
+                };
+                const updateFnMap = {
+                    0x8: (val) => (this.B=val),
+                    0x9: (val) => (this.C=val),
+                    0xA: (val) => (this.D=val),
+                    0xB: (val) => (this.E=val),
+                    0xC: (val) => (this.C=val),
+                    0xD: (val) => (this.updateL(val)),
+                    0xE: (val) => this.bus.writeByte(this.HL, val),
+                    0xF: (val) => (this.A=val)
+                };
+
+                let shouldSetCarryFlag = false;
+                const val = valueMap[nextInstrByte & 0x0F];
+                if ((val & 0x01) === 0x01) {
+                  shouldSetCarryFlag = true;
+                }
+
+                updateFnMap[nextInstrByte & 0x0F](val >> 1);
+
+                this.clearFlag(CARRY_FLAG);
+                if (shouldSetCarryFlag) {
+                    this.setFlag(CARRY_FLAG);
+                }
+
+                this.clearFlag(SUBTRACTION_FLAG);
+                this.clearFlag(HALF_CARRY_FLAG);
+
+                this.PC += 2;
+                return nextInstrByte == 0x3E ? 16 : 8;
             default:
                 console.log(`Error: encountered an unsupported opcode of ${displayAsHex(op)} ${displayAsHex(nextInstrByte)} at address ${displayAsHex(this.PC)}`);
                 return 0;
@@ -2519,6 +2787,36 @@ export class CPU {
 
         console.log(`Error: encountered an unsupported opcode of ${displayAsHex(op)} at address ${displayAsHex(this.PC)}`);
         return 0;
+    }
+
+    private daaInstruction() {
+        if (!this.getFlag(SUBTRACTION_FLAG)) {
+            if (this.getFlag(HALF_CARRY_FLAG) || (this.A & 0xF) > 9) {
+              this.A += 0x06;
+            }
+
+            if (this.getFlag(CARRY_FLAG) || this.A > 0x9F) {
+              this.A += 0x60;
+            }
+        } else {
+            if (this.getFlag(HALF_CARRY_FLAG)) {
+              this.A = (this.A - 6) & 0xFF;
+            }
+
+            if (this.getFlag(CARRY_FLAG)) {
+              this.A -= 0x60;
+            }
+        }
+
+        if ((this.A & 0x100) === 0x100) {
+          this.setFlag(CARRY_FLAG);
+        }
+
+        this.A &= 0xFF;
+
+        if (this.A === 0) {
+          this.setFlag(ZERO_FLAG);
+        }
     }
 
     private rotateRightThroughCarry(value: number): number {
@@ -2563,6 +2861,15 @@ export class CPU {
         this.setFlag(HALF_CARRY_FLAG);
         this.clearFlag(CARRY_FLAG);
         return 4; // consumes 4 cycles
+    }
+
+    private executeOr(operand: number) {
+        this.A = this.A | operand;
+        this.updateZeroFlag(this.A);
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        this.clearFlag(CARRY_FLAG);
+        return 8;
     }
 
     // @return number => the resulting value after its nibbles are swapped
