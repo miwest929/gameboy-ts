@@ -41,3 +41,26 @@ export function loadTextFile(filepath: string) {
 export function displayAsHex(n: number) {
     return `0x${n.toString(16)}`;
 }
+
+export function bitNegation(value: number): number {
+    let binaryString: string = value.toString(2);
+    let negatedBinary: string = "";
+    for (let i = 0; i < binaryString.length; i++) {
+        negatedBinary += binaryString[i] === '1' ? '0' : '1';
+    }
+    return parseInt(negatedBinary, 2);
+}
+
+export function makeSigned(value: number, bytesCount: number): number {
+    let msbMask: number = 0x80;
+    if (bytesCount === 2) {
+        msbMask = 0x8000;
+    }
+    
+    if ((value & msbMask) > 0) {
+      // value is negative
+      return -(bitNegation(value) + 1);
+    }
+  
+    return value;
+  }
