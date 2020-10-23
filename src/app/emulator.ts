@@ -433,6 +433,12 @@ export class CPU {
         this.C = result[0] & 0x00FF;
     }
 
+    public decrementDE() {
+        const result = wrappingTwoByteSub(this.DE(), 1);
+        this.D = result[0] >> 8;
+        this.E = result[0] & 0x00FF;
+    }
+
     public addOneByte(val1: number, val2: number, carryVal = 0) {
         const result = wrappingByteAdd(val1, val2 + carryVal);
         this.updateHalfCarryFlag(val1, val2);
@@ -465,6 +471,11 @@ export class CPU {
 
     public incrementHL() {
         const result = wrappingTwoByteAdd(this.HL, 1);
+        this.HL = result[0];
+    }
+
+    public decrementHL() {
+        const result = wrappingTwoByteSub(this.HL, 1);
         this.HL = result[0];
     }
 
@@ -1907,7 +1918,8 @@ export class CPU {
                 0x92: () => { return this.subOneByte(this.A, this.D); },
                 0x93: () => { return this.subOneByte(this.A, this.E); },
                 0x94: () => { return this.subOneByte(this.A, this.H()); },
-                0x95: () => { return this.subOneByte(this.A, this.L()); }
+                0x95: () => { return this.subOneByte(this.A, this.L()); },
+                0x97: () => { return this.subOneByte(this.A, this.A); }
             }
 
             this.A = opMap[op]();
@@ -1946,6 +1958,77 @@ export class CPU {
         } else if (op === 0x27) {
             // DAA
             this.daaInstruction();
+            this.PC++;
+            return 4;
+        } else if (op === 0x2E) {
+            // LD L,d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.updateL(value);
+            this.PC += 2;
+            return 8;
+        } else if (op === 0xAD) {
+            // XOR L
+            this.A = this.A ^ this.L();
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0x1B) {
+            // DEC DE
+            this.decrementDE();
+            this.PC++;
+            return 8;
+        } else if (op === 0x2B) {
+            // DEC HL
+            this.decrementHL();
+            this.PC++;
+            return 8;
+        } else if (op === 0x37) {
+            // SCF
+            // Set Carry flag
+            this.setFlag(CARRY_FLAG);
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.clearFlag(HALF_CARRY_FLAG);
+            this.PC++;
+            return 4;
+        } else if (op === 0x3F) {
+            // CCF
+            // Complement carry flag
+            this.clearFlag(SUBTRACTION_FLAG);
+            this.clearFlag(HALF_CARRY_FLAG);
+            this.getFlag(CARRY_FLAG) ? this.clearFlag(CARRY_FLAG) : this.setFlag(CARRY_FLAG);
+            this.PC++;
+            return 4;
+        } else if (op === 0x98) { 
+            this.sbcInstruction(this.B);
+            this.PC++;
+            return 4;
+        }  else if (op === 0x99) {
+            this.sbcInstruction(this.C);
+            this.PC++;
+            return 4; 
+        }  else if (op === 0x9A) {
+            this.sbcInstruction(this.D); 
+            this.PC++;
+            return 4;
+        }  else if (op === 0x9B) {
+            this.sbcInstruction(this.E);
+            this.PC++;
+            return 4;
+        }  else if (op === 0x9C) {
+            this.sbcInstruction(this.H());
+            this.PC++;
+            return 4; 
+        }  else if (op === 0x9D) {
+            this.sbcInstruction(this.L());
+            this.PC++;
+            return 4;
+        }  else if (op === 0x9E) {
+            const value = this.bus.readByte(this.HL);
+            this.sbcInstruction(value);
+            this.PC++;
+            return 8;
+        }  else if (op === 0x9F) {
+            this.sbcInstruction(this.A);
             this.PC++;
             return 4;
         } else if (op === 0xCB) {
@@ -2203,6 +2286,11 @@ export class CPU {
 
         console.log(`Error: encountered an unsupported opcode of ${displayAsHex(op)} at address ${displayAsHex(this.PC)}`);
         return 0;
+    }
+
+    private sbcInstruction(value) {
+      const carryFlag = this.getFlag(CARRY_FLAG) ? 1 : 0;
+      this.subOneByte(this.A, value, carryFlag);
     }
 
     private daaInstruction() {
