@@ -1,7 +1,7 @@
 // Some opcodes are more than 1 byte long due to instruction parameters. Ex: opCode 0x01 (LD BC, {d16}). Instruction is 3 bytes long.
 
 import { CPU } from "./emulator";
-import { makeSigned } from './utils';
+import { makeSigned, displayAsHex } from './utils';
 
 // This disassembler should resolve instruction parameters to their actual values. The 'getNextByte' function
 export function disassemble(op: number, cpu: CPU) {
@@ -74,24 +74,30 @@ export function disassemble(op: number, cpu: CPU) {
       "SET 6, B", "SET 6, C", "SET 6, D", "SET 6, E", "SET 6, H", "SET 6, L", "SET 6, (HL)", "SET 6, A", "SET 7, B", "SET 7, C", "SET 7, D", "SET 7, E", "SET 7, H", "SET 7, L", "SET 7, (HL)", "SET 7, A",
     ];
 
-    if (op === 0xCB) {
-        const cbOp = cpu.bus.readByte(cpu.PC + 1);
-        return cbPrefixOpcodes[cbOp];        
+    if ((op & 0xFF00) === 0xCB00) {
+        return cbPrefixOpcodes[op & 0x00FF];        
     }
 
+    /* NOTE: Need to implement our own string interpolation because we don't know
+             in advance how many arguments or their byte size are required. It's different
+             for most instructions. So instead of reading memory in antipication we'll wait
+             until we know the exact instruction we're dealing with. And only then will we
+             precisely read memory from the bus.
+    */
     let instr = opcodes[op];
     if (instr.includes("{d8}")) {
       const value = cpu.bus.readByte(cpu.PC + 1);
       instr = instr.replace("{d8}", value.toString());
     } else if (instr.includes("{a16}")) {
-      const addr = cpu.readTwoByteValue(cpu.PC);
-      instr = instr.replace("{a16}", addr.toString());
+      const addr = cpu.readTwoByteValue(cpu.PC + 1);
+      instr = instr.replace("{a16}", displayAsHex(addr));
     } else if (instr.includes("{d16}")) {
-      const value = cpu.readTwoByteValue(cpu.PC);
+      const value = cpu.readTwoByteValue(cpu.PC + 1);
       instr = instr.replace("{d16}", value.toString());
     } else if (instr.includes("{r8}")) {
-      const value = this.bus.readByte(this.PC + 1);
+      const value = cpu.bus.readByte(cpu.PC + 1);
       const offset = makeSigned(value, 1);
+      console.log(`value = ${value}, offset = ${offset}`);
       instr = instr.replace("{r8}", offset.toString());
     }
 

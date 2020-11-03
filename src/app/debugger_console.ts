@@ -238,6 +238,7 @@ export class DebugConsole {
             } else if (command.startsWith('readmem')) {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
+                console.log(`[readmem] addr = ${displayAsHex(addr)}, addr (base10) = ${addr}`);
                 this.displayMemoryAddressValue(addr);
             } else if (command.startsWith("setbp") || command.startsWith("setbreakpoint")) {
                 const args = command.split(' ').slice(1);

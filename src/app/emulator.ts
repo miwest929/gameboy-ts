@@ -197,7 +197,8 @@ export class MemoryBus {
             // console.log(`OUT: ${String.fromCharCode(value)}`);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             // console.warn("I/O Registers aren't supported yet");
-        } else if (addr >= 0x0000 && addr <= 0x7FFF) {  
+        } else if (addr >= 0x0000 && addr <= 0x7FFF) {
+            console.log(`PC = ${displayAsHex(this.cpu.PC)}, value = ${displayAsHex(value)}, addr = ${displayAsHex(addr)}`);
             this.cartridge.mbc.WriteByte(addr, value);
         } else if (addr >= 0xFEA0 && addr <= 0xFEFF) {
             // Ignore writes to this range as its undocumented
@@ -517,8 +518,8 @@ export class CPU {
 
     public loadFlags(value: number): FlagRegister {
         return {
-            subtractionFlag: (value & 0x80) === 0x80,
-            zeroFlag: (value & 0x40) === 0x40,
+            subtractionFlag: (value & 0x40) === 0x40,
+            zeroFlag: (value & 0x80) === 0x80,
             halfCarryFlag: (value & 0x20) === 0x20,
             carryFlag: (value & 0x10) === 0x10
         }
@@ -527,11 +528,11 @@ export class CPU {
     public serializeFlags(flags: FlagRegister): number {
         let value = 0x00;
         if (flags.subtractionFlag) {
-          value |= 0x80;
+          value |= 0x40;
         }
 
         if (flags.zeroFlag) {
-            value |= 0x40;
+            value |= 0x80;
         }
 
         if (flags.halfCarryFlag) {
@@ -713,12 +714,6 @@ export class CPU {
             // JP 2-byte-address
             this.PC = this.readTwoByteValue(this.PC + 1);;
             return 16;
-        } else if (op === 0xAF) {
-            // XOR A  (1 byte, 4 cycles)
-            this.A = this.A ^ this.A;
-            this.updateZeroFlagAndClearOthers();
-            this.PC++;
-            return 4;
         } else if (op === 0x21) {
             // LD HL, d16 (3 bytes, 12 cycles)
             this.HL = this.readTwoByteValue(this.PC + 1);
@@ -879,7 +874,7 @@ export class CPU {
             return 8;
         } else if (op === 0x07) {
             // RLCA
-            console.log("RLCA [NOT IMPL]");
+            this.A = this.rotateLeft(this.A);
             this.PC++;
             return 4;
         } else if (op === 0x08) {
@@ -1099,9 +1094,10 @@ export class CPU {
             this.PC++;
             return 16;
         } else if (op === 0xE5) {
-            // PUSH HL
+            // PUSH HL            
             this.stackPush(this.H());
             this.stackPush(this.L());
+            //console.log(`[PUSH HL][PC = ${displayAsHex(this.PC)}] L = ${displayAsHex(this.L())}, H = ${displayAsHex(this.H())}, HL = ${displayAsHex(this.HL)}, SP = ${displayAsHex(this.SP)}`);
             this.PC++;
             return 16;
         } else if (op === 0xA7) {
@@ -1271,9 +1267,11 @@ export class CPU {
             return 12;
         } else if (op === 0xE1) {
             // POP HL
+            const oldSP = this.SP;
             const l = this.stackPop();
             const h = this.stackPop();
             this.HL = (h << 8) | l; 
+            //console.log(`[POP HL][PC = ${displayAsHex(this.PC)}] L = ${displayAsHex(l)}, H = ${displayAsHex(h)}, HL = ${displayAsHex(this.HL)}, SP = ${displayAsHex(oldSP)}`);
             this.PC++;
             return 12;
         } else if (op === 0xF1) {
@@ -1375,12 +1373,6 @@ export class CPU {
         } else if (op === 0x48) {
             // 'LD C, B';
             this.C = this.B;
-            this.PC++;
-            return 4;
-        } else if (op === 0xA9) {
-            // XOR C
-            this.A = this.A ^ this.C;
-            this.updateZeroFlagAndClearOthers();
             this.PC++;
             return 4;
         } else if (op === 0xEF) {
@@ -1741,13 +1733,6 @@ export class CPU {
             this.A = this.subOneByte(this.A, value);
             this.PC += 2;
             return 8;
-        } else if (op === 0xAE) {
-            // XOR (HL)
-            const value = this.bus.readByte(this.HL);
-            this.A ^= value;
-            this.updateZeroFlagAndClearOthers();
-            this.PC++;
-            return 8;
         } else if (op === 0x26) {
             // `LD H, d8`;
             const value = this.bus.readByte(this.PC + 1);
@@ -1939,6 +1924,7 @@ export class CPU {
                 this.setFlag(CARRY_FLAG);
             }
             this.HL = result[0];
+            //console.log(`[LD HL, SP + value] PC = ${displayAsHex(this.PC)}, HL = ${displayAsHex(this.HL)}, offset = ${displayAsHex(offset)} SP = ${displayAsHex(this.SP)}`);
             this.clearFlag(SUBTRACTION_FLAG);
             this.clearFlag(ZERO_FLAG);
             this.PC += 2;
@@ -1966,12 +1952,6 @@ export class CPU {
             this.updateL(value);
             this.PC += 2;
             return 8;
-        } else if (op === 0xAD) {
-            // XOR L
-            this.A = this.A ^ this.L();
-            this.updateZeroFlagAndClearOthers();
-            this.PC++;
-            return 4;
         } else if (op === 0x1B) {
             // DEC DE
             this.decrementDE();
@@ -2029,6 +2009,66 @@ export class CPU {
             return 8;
         }  else if (op === 0x9F) {
             this.sbcInstruction(this.A);
+            this.PC++;
+            return 4;
+        } else if (op === 0xA8) {
+            // XOR B
+            this.A = this.A ^ this.B;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xA9) {
+            // XOR C
+            this.A = this.A ^ this.C;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xAA) {
+            // XOR D
+            this.A = this.A ^ this.D;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xAB) {
+            // XOR E
+            this.A = this.A ^ this.E;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xAC) {
+            // XOR H
+            this.A = this.A ^ this.H();
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xAD) {
+            // XOR L
+            this.A = this.A ^ this.L();
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0xAE) {
+            // XOR (HL)
+            const value = this.bus.readByte(this.HL);
+            this.A = this.A ^ value;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 8;
+        } else if (op === 0xAF) {
+            // XOR A
+            this.A = this.A ^ this.A;
+            this.updateZeroFlagAndClearOthers();
+            this.PC++;
+            return 4;
+        } else if (op === 0x17) {
+            // RLA
+            this.A = this.rotateLeftThroughCarry(this.A);
+            this.PC++;
+            return 4;
+        } else if (op === 0x0F) {
+            // RRCA
+            // Rotate A right. Old bit 0 to Carry flag.
+            this.A = this.rotateRight(this.A);
             this.PC++;
             return 4;
         } else if (op === 0xCB) {
@@ -2323,6 +2363,35 @@ export class CPU {
         }
     }
 
+    private rotateLeftThroughCarry(value: number): number {
+        const currCarry = this.Flags.carryFlag ? 0x01 : 0x00;
+        const newCarryValue = (value & 0x80) === 0x80 ? true : false;
+        this.Flags.carryFlag = newCarryValue ? true : false;
+        const updated = (value << 1) | currCarry;
+        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;
+    }
+
+    private rotateRight(value: number) {
+        this.Flags.carryFlag = (value & 0x01) === 0x01 ? true : false;
+        const updated = value >>> 1;
+        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;
+    }
+
+    private rotateLeft(value: number) {
+        this.Flags.carryFlag = (value & 0x80) === 0x80 ? true : false;
+        const updated = value << 1;
+        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;
+    }
+
     private rotateRightThroughCarry(value: number): number {
         // 1001 1010
         // 0011 010[0] | [1]
@@ -2408,6 +2477,9 @@ export class CPU {
 
     private stackPush(value: number) {
         this.SP--;
+        // if (value === 0x4 && this.SP === 0xDFFB) {
+        //     console.log(`[stackPush] PC = ${displayAsHex(this.PC)}, value = ${displayAsHex(value)}, SP = ${displayAsHex(this.SP)}`);
+        // }
         this.bus.writeByte(this.SP, value);
     }
 
@@ -2554,12 +2626,10 @@ export class Gameboy {
 
     if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
       // suspend execution until a key is pressed
-
       const op = this.readNextOpCode();
-      console.log(`nextOpCode = ${displayAsHex(op)}`);
       this.cpu.lastExecutedOpCode = op;
       const disassembled = this.cpu.disassembleNextInstruction(op) || "<unknown>";
-      console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled}`);
+      console.log(`* [${displayAsHex(prevProgramCounter)}]: ${disassembled} {op = ${displayAsHex(op)}}`);
       this.debugger.showConsole();
     }
 
