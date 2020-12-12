@@ -35,7 +35,7 @@ export function disassemble(op: number, cpu: CPU) {
     // 0xD0 - 0xDF 
       "RET NC", "POP DE", "JP NC, {a16}", "<unknown>", "CALL NC, {a16}", "PUSH DE", "SUB {d8}", "RST 10H", "RET C", "RETI", "JP C, {a16}", "<unknown>", "CALL C, {a16}", "<unknown>", "SBC A, {d8}", "RST 18H",
     // 0xE0 - 0xEF
-      "LDH (a8), A", "POP HL", "LD (C), A", "<unknown>", "<unknown>", "PUSH HL", "AND {d8}", "RST 20H", "ADD SP, {r8}", "JP (HL)", "LD ({a16}), A", "<unknown>", "<unknown>", "<unknown>", "XOR {d8}", "RST 28H",
+      "LDH (0xFF00 + {a8}), A", "POP HL", "LD (C), A", "<unknown>", "<unknown>", "PUSH HL", "AND {d8}", "RST 20H", "ADD SP, {r8}", "JP (HL)", "LD ({a16}), A", "<unknown>", "<unknown>", "<unknown>", "XOR {d8}", "RST 28H",
     // 0xF0 - 0xFF
       "LDC A, (a8)", "POP AF", "LD A, (C)", "DI", "<unknown>", "PUSH AF", "OR {d8}", "RST 30H", "LD HL, SP+{r8}", "LD SP, HL", "LD A, ({a16})", "EI", "<unknown>", "<unknown>", "CP {d8}", "RST 38H"
     ]
@@ -88,6 +88,9 @@ export function disassemble(op: number, cpu: CPU) {
     if (instr.includes("{d8}")) {
       const value = cpu.bus.readByte(cpu.PC + 1);
       instr = instr.replace("{d8}", value.toString());
+    } else if (instr.includes("{a8}")) {
+      const addr = cpu.bus.readByte(cpu.PC + 1);
+      instr = instr.replace("{a8}", displayAsHex(addr));
     } else if (instr.includes("{a16}")) {
       const addr = cpu.readTwoByteValue(cpu.PC + 1);
       instr = instr.replace("{a16}", displayAsHex(addr));
