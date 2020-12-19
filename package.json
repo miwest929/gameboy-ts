@@ -11,6 +11,7 @@
     "dist/ppu.js",
     "dist/utils.js",
     "dist/rom_loader.js",
+    "dist/disassembler.js",
     "dist/debugger_console.js"
   ],
   "scripts": {

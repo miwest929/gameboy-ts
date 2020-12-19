@@ -3,20 +3,13 @@ import { loadTextFile, displayAsHex } from "./utils";
 
 export function loadBreakpoints(filename: string): Breakpoint[] {
     const breakpointsContents = loadTextFile(filename);
-    const breakpoints: Breakpoint[] = [];
-    
+
     if (breakpointsContents === "") {
         return [];
     }
 
-    for (const line of breakpointsContents.split("\n")) {
-        const bp = Breakpoint.from(line);
-        if (bp) {
-          breakpoints.push(bp);
-        }
-    }
-
-    return breakpoints;
+    const lines = breakpointsContents.split("\n");
+    return lines.map((l) => Breakpoint.from(l)).filter((bp) => bp);
 }
 
 abstract class Breakpoint {
@@ -28,6 +21,8 @@ abstract class Breakpoint {
       if (cmd === "address") {
         const addr = parseInt(args[0], 16);
         return new AddressBreakpoint(addr);
+      } else if (cmd === "addresscond") {
+        return AddressCondBreakpoint.from(args);
       } else if (cmd === "address-value-change") {
         const addr = parseInt(args[0], 16);
         return new AddressValueChangeBreakpoint(addr);
@@ -42,6 +37,31 @@ abstract class Breakpoint {
     }
 
     abstract hasTriggered(gb: Gameboy): boolean;
+}
+
+// trigger breakpoint when PC == <address> and <value-of-A-register> == <aValue>
+export class AddressCondBreakpoint {
+    public address: number;
+    public aValue: number;
+
+    constructor(address: number, aValue: number) {
+        this.address = address;
+        this.aValue = aValue;
+    }
+ 
+    public hasTriggered(gb: Gameboy): boolean {
+        return gb.cpu.PC === this.address && gb.cpu.A === this.aValue;
+    }
+ 
+    public toString() {
+        return `<AddressCondBreakpoint addr=${displayAsHex(this.address)}, aValue=${displayAsHex(this.aValue)}>`;
+    }
+
+    static from(args: string[]): AddressCondBreakpoint {
+        const addr = parseInt(args[0], 16);
+        const aValue = parseInt(args[0], 16);
+        return new AddressCondBreakpoint(addr, aValue);
+    }
 }
 
 export class AddressBreakpoint {
@@ -119,10 +139,13 @@ export class DebugConsole {
 
     private readlineSync: any;
 
+    private tracedAddresses: number[];
+
     constructor(gb: Gameboy, readlineSync?: any) {
         this.gameboy = gb;
         this.breakpoints = loadBreakpoints("./breakpoints");
         this.pastAddresses = [0x100]; // 0x100 is the address start executing..
+        this.tracedAddresses = [];
         this.readlineSync = readlineSync;
     }
 
@@ -214,6 +237,10 @@ export class DebugConsole {
         return this.inDebuggerMode;
     }
 
+    public recordAddress(cpu: any) {
+        this.tracedAddresses.push(cpu.PC);
+    }
+
     public showConsole() {
         // When true the reply will continue to prompt user for debugger commands
         // the NEXT and CONTINUE command will exit this loop
@@ -263,8 +290,10 @@ export class DebugConsole {
                 console.log(messages.join('\n'));
             } else if (command === "trace") {
                 // Display list of call addresses. Every time a call happens its address will be traced
-                const formattedAddrs = this.pastAddresses.map((a) => displayAsHex(a));
-                console.log(`Address call stack: ${formattedAddrs.join(', ')}`);
+                //const formattedAddrs = this.pastAddresses.map((a) => displayAsHex(a));
+                //console.log(`Address call stack: ${formattedAddrs.join(', ')}`);
+                console.log(`Past 40 addresses:`);
+                console.log( this.tracedAddresses.reverse().slice(0, 40).map((a) => displayAsHex(a)).join(", ") );
             }
         }
     } 

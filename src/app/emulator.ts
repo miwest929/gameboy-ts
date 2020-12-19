@@ -4,6 +4,9 @@ import { PPU, Address } from './ppu';
 import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
 import { disassemble } from './disassembler';
+
+const ADDRESS_TRACING_MODE = true;
+
 /*
 TODO:
   In order to hookthe backend (this repo) with its frontend (gameboy-ts-web) this file needs to be
@@ -194,7 +197,7 @@ export class MemoryBus {
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr === 0xFF01) {
-            console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)})`);
+            console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             // console.warn("I/O Registers aren't supported yet");
         } else if (addr >= 0x0000 && addr <= 0x7FFF) {
@@ -1896,6 +1899,8 @@ export class CPU {
             this.PC++;
             return 4;
         } else if (op === 0xF8) {
+            // https://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags/7261149
+            // https://stackoverflow.com/questions/57958631/game-boy-half-carry-flag-and-16-bit-instructions-especially-opcode-0xe8
             console.log("LD HL, SP + value");
             // `LD HL, SP + ${value}`;
             // TODO: half-carry AND carry flags might not be setting correctly
@@ -2617,6 +2622,10 @@ export class Gameboy {
   // @return boolean => should we continue executing
   public async executeNextTick(): Promise<boolean> {
     const prevProgramCounter = this.cpu.PC;
+
+    if (ADDRESS_TRACING_MODE) {
+        this.debugger.recordAddress(this.cpu);
+    }
 
     if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
       // suspend execution until a key is pressed
