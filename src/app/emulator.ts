@@ -298,7 +298,7 @@ const INITIAL_HL_REG_VALUE = 0x014D;
 // used for delaying disabling interrupts
 const INTERRUPT_DELAY_COUNTER_INACTIVE = -1;
 
-type FlagRegister = {
+export type FlagRegister = {
     subtractionFlag: boolean,
     carryFlag: boolean,
     zeroFlag: boolean,
@@ -440,13 +440,13 @@ export class CPU {
 
     public decrementDE() {
         const result = wrappingTwoByteSub(this.DE(), 1);
-        this.D = result[0] >> 8;
+        this.D = result[0] >>> 8;
         this.E = result[0] & 0x00FF;
     }
 
     public incrementDE() {
         const result = wrappingTwoByteAdd(this.DE(), 1);
-        this.D = result[0] >> 8;
+        this.D = result[0] >>> 8;
         this.E = result[0] & 0x00FF;
     }
 
@@ -456,13 +456,13 @@ export class CPU {
 
     public decrementBC() {
         const result = wrappingTwoByteSub(this.BC(), 1);
-        this.B = result[0] >> 8;
+        this.B = result[0] >>> 8;
         this.C = result[0] & 0x00FF;
     }
 
     public incrementBC() {
         const result = wrappingTwoByteAdd(this.BC(), 1);
-        this.B = result[0] >> 8;
+        this.B = result[0] >>> 8;
         this.C = result[0] & 0x00FF;
     }
 
@@ -477,7 +477,7 @@ export class CPU {
 
     public addOneByte(val1: number, val2: number, carryVal = 0) {
         const result = wrappingByteAdd(val1, val2 + carryVal);
-        this.updateHalfCarryFlag(val1, val2);
+        this.updateHalfCarryFlag(val1, val2 + carryVal);
         this.clearFlag(SUBTRACTION_FLAG);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
         this.updateZeroFlag(result[0]);
@@ -486,7 +486,7 @@ export class CPU {
 
     public subOneByte(val1: number, val2: number, carryVal = 0) {
         const result = wrappingByteSub(val1, val2 + carryVal);
-        this.updateSubHalfCarryFlag(val1, val2);
+        this.updateSubHalfCarryFlag(val1, val2 + carryVal);
         this.setFlag(SUBTRACTION_FLAG);
         this.updateZeroFlag(result[0]);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
@@ -715,7 +715,7 @@ export class CPU {
             return 12;
         } else if (op === 0x0E) {
             // LD C,d8
-            this.C = this.bus.readByte(this.PC + 1);;            
+            this.C = this.bus.readByte(this.PC + 1);         
             this.PC += 2;
             return 8;
         } else if (op === 0x06) {
@@ -736,12 +736,10 @@ export class CPU {
         } else if (op === 0x05) {
             // DEC B
             const result = wrappingByteSub(this.B, 1);
+            this.updateSubHalfCarryFlag(this.B, 1);
             this.B = result[0];
             this.setFlag(SUBTRACTION_FLAG);
-        
             this.updateZeroFlag(this.B);
-            this.clearFlag(CARRY_FLAG);
-
             this.PC++;
             return 4;
         } else if (op === 0x20) {
@@ -766,8 +764,6 @@ export class CPU {
             this.C = result[0];
             this.setFlag(SUBTRACTION_FLAG);
             this.updateZeroFlag(this.C);
-            this.clearFlag(CARRY_FLAG);
-
             this.PC++;
             return 4;
         } else if (op === 0x1D) {
@@ -1744,12 +1740,12 @@ export class CPU {
             return 8;
         } else if (op === 0x33) {
             // INC SP
-            this.SP++;
+            this.SP = (this.SP + 1) & 0xFFFF;
             this.PC++;
             return 8
         } else if (op === 0x3B) {
             // DEC SP
-            this.SP--;
+            this.SP  = (this.SP - 1) & 0xFFFF;
             this.PC++;
             return 8
         } else if ((op >= 0x70 && op <= 0x75) || op === 0x77) {
@@ -1832,11 +1828,10 @@ export class CPU {
             this.E = this.incrementRegister(this.E);
             this.PC++;
             return 4;
-        } else if ([0x13, 0x23, 0x24, 0x2C, 0x33, 0x34, 0x3C].includes(op)) {
+        } else if ([0x13, 0x23, 0x24, 0x2C, 0x34, 0x3C].includes(op)) {
             const opMap = {
               0x13: () => this.incrementDE(),
               0x23: () => this.incrementHL(),
-              0x33: () => this.SP++,
               0x24: () => this.incrementH(),
               0x2C: () => this.incrementL(),
               0x34: () => {
@@ -1901,7 +1896,6 @@ export class CPU {
         } else if (op === 0xF8) {
             // https://stackoverflow.com/questions/5159603/gbz80-how-does-ld-hl-spe-affect-h-and-c-flags/7261149
             // https://stackoverflow.com/questions/57958631/game-boy-half-carry-flag-and-16-bit-instructions-especially-opcode-0xe8
-            console.log("LD HL, SP + value");
             // `LD HL, SP + ${value}`;
             // TODO: half-carry AND carry flags might not be setting correctly
             const value = this.bus.readByte(this.PC + 1);
@@ -2060,6 +2054,11 @@ export class CPU {
             this.A = this.rotateRight(this.A);
             this.PC++;
             return 4;
+        } else if (op === 0x23) {
+            // INC HL
+            this.incrementHL();
+            this.PC++;
+            return 8;
         } else if (op === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2333,13 +2332,14 @@ export class CPU {
               this.A -= 0x60;
             }
         }
-
+        this.clearFlag(HALF_CARRY_FLAG);
         if ((this.A & 0x100) === 0x100) {
           this.setFlag(CARRY_FLAG);
         }
 
         this.A &= 0xFF;
 
+        this.clearFlag(ZERO_FLAG);
         if (this.A === 0) {
           this.setFlag(ZERO_FLAG);
         }
@@ -2353,39 +2353,52 @@ export class CPU {
 
     private rotateLeftThroughCarry(value: number): number {
         const currCarry = this.Flags.carryFlag ? 0x01 : 0x00;
-        const newCarryValue = (value & 0x80) === 0x80 ? true : false;
-        this.Flags.carryFlag = newCarryValue ? true : false;
-        const updated = (value << 1) | currCarry;
-        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        this.Flags.carryFlag = (value & 0x80) === 0x80;
+        let updated = (value << 1);
+        if (currCarry) {
+            updated ^= 0x01;
+        }
+        this.clearFlag(ZERO_FLAG);
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
     }
 
     private rotateRight(value: number) {
-        this.Flags.carryFlag = (value & 0x01) === 0x01 ? true : false;
-        const updated = value >>> 1;
-        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        const bit0 = (value & 0x01) === 0x01;
+        let updated = value >>> 1;
+        if (bit0) {
+            this.setFlag(CARRY_FLAG)
+            updated ^= 0x80
+        }
+        this.clearFlag(ZERO_FLAG);
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
     }
 
     private rotateLeft(value: number) {
-        this.Flags.carryFlag = (value & 0x80) === 0x80 ? true : false;
-        const updated = value << 1;
-        this.Flags.zeroFlag = updated === 0x00 ? true : false;
+        const bit7 = (value & 0x80) === 0x80;
+        let updated = value << 1;
+
+        this.clearFlag(CARRY_FLAG);
+        if (bit7) {
+            this.setFlag(CARRY_FLAG);
+            updated ^= 0x01;
+        }
+        this.clearFlag(ZERO_FLAG);
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
     }
 
-    private shiftRightIntoCarry(value: number): number {
+    public shiftRightIntoCarry(value: number): number {
         this.clearFlag(CARRY_FLAG);
-        if ((this.B & 0x01) === 0x01) {
+        if ((value & 0x01) === 0x01) {
             this.setFlag(CARRY_FLAG);
         }
-        const updated = this.B >>> 1;
+        const updated = value >>> 1;
+        this.clearFlag(ZERO_FLAG);
         if (updated === 0) {
             this.setFlag(ZERO_FLAG);
         }
@@ -2398,9 +2411,11 @@ export class CPU {
         // 1001 1010
         // 0011 010[0] | [1]
         const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
-        const newCarryValue = (value & 0x01) === 0x01 ? true : false;
-        this.Flags.carryFlag = newCarryValue ? true : false;
-        const updated = (value >>> 1) ^ currCarry;
+        this.Flags.carryFlag = (value & 0x01) === 0x01;
+        let updated = (value >>> 1);
+        if (currCarry === 0x80) {
+          updated ^= currCarry;
+        }
         this.Flags.zeroFlag = updated === 0x00 ? true : false;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
