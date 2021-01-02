@@ -1,4 +1,4 @@
-import { displayAsHex } from './utils';
+import { displayAsHex, debugLog } from './utils';
 
 const ROM_BANK_SIZE_BYTES = 0x4000;
 
@@ -80,14 +80,15 @@ export class MBC1 extends MemoryBankController {
        if (newROMBank === 0x00) {
            newROMBank = 0x01;
        }
-       console.log(`SWITCHING ROM BANKS to ${newROMBank}`);
+
+       debugLog(`Switching ROM bank to ${newROMBank}`);
        this.currentROMBank = newROMBank;
    }
 
    private switchRAMBank(newRAMBank: number) {
-    console.log(`switch RAM bank to ${newRAMBank}`);
-    throw new Error(`Switching RAM banks is not supported`);
+    debugLog(`Switching RAM bank to ${newRAMBank}`);
     this.currentRAMBank = newRAMBank;
+    throw new Error(`Switching RAM banks is not supported`);
    }
 
 }

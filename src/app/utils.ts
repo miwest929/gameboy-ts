@@ -1,6 +1,14 @@
 import * as textEncoding from 'text-encoding'; // npm install --save @types/text-encoding
 import * as fs from 'fs';
 
+const VERBOSE_LOGGING = false;
+
+export function debugLog(log) {
+    if (VERBOSE_LOGGING) {
+        console.log(log);
+    }
+}
+
 export function arrayRepeat<T>(value: T, times: number): T[] {
 	let arr = [];
 	for (let i = 0; i < times; i++) {
