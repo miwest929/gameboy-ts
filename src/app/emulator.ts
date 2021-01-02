@@ -799,13 +799,17 @@ export class CPU {
             // Rotate A right through Carry flag.
             // RRA
             const newCarryValue = (this.A & 0x01) === 0x01;
-            const oldCarryValue = this.getFlag(CARRY_FLAG) ? 0x01 : 0x00;
-            this.A = (this.A >> 1) | (oldCarryValue << 7);
+
+            this.A = this.A >>> 1;
+            if (this.getFlag(CARRY_FLAG)) {
+                this.A ^= 0x80;
+            }
+
+            this.clearFlag(CARRY_FLAG);
             if (newCarryValue) {
                 this.setFlag(CARRY_FLAG);
-            } else {
-                this.clearFlag(CARRY_FLAG);
             }
+
             this.clearFlag(ZERO_FLAG);
             this.clearFlag(HALF_CARRY_FLAG);
             this.clearFlag(SUBTRACTION_FLAG);
