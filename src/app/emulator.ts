@@ -56,7 +56,7 @@ const ROM_BANK_END_ADDR = 32767;
 // }
 
 const IE_ADDR = 0xFFFF;
-class InterruptEnabledRegister {
+export class InterruptEnabledRegister {
     public RawValue: number;
 
     constructor() {
@@ -99,7 +99,7 @@ export enum Interrupt {
   UNUSED3 = 0x80
 };
 
-enum InterruptAddress {
+export enum InterruptAddress {
     VBLANK = 0x0040,
     LCDCSTAT = 0x0048,
     TIMER = 0x0050,
@@ -108,7 +108,7 @@ enum InterruptAddress {
 }
 
 const IF_ADDR = 0xFF0F;
-class InterruptRequestRegister {
+export class InterruptRequestRegister {
     public RawValue: number;
 
     constructor() {
@@ -333,6 +333,7 @@ export class CPU {
 
     // [used by DebuggerConsole] Opcode of the last executed instruction
     public lastExecutedOpCode: number;
+    public totalCpuInstructionsExecuted: number;
 
     constructor() {
         this.A = INITIAL_A_REG_VALUE;
@@ -353,6 +354,7 @@ export class CPU {
 
         this.disableInterruptsCounter = INTERRUPT_DELAY_COUNTER_INACTIVE; // -1 means to ignore this counter
         this.shouldEnableInterrupts = false;
+        this.totalCpuInstructionsExecuted = 0;
     }
 
     public setMemoryBus(bus: MemoryBus) {
@@ -385,7 +387,7 @@ export class CPU {
     }
 
     public H(): number {
-        return (this.HL & 0xFF00) >> 8;
+        return (this.HL & 0xFF00) >>> 8;
     }
 
     public L(): number {
@@ -677,7 +679,15 @@ export class CPU {
 
     public addToHLInstr(value: number) {
         const result = wrappingTwoByteAdd(this.HL, value);
-        this.updateHalfCarryFlag(this.HL, value);
+
+        // TODO: REVIEW ALL CALLS to UPDATE HALF-CARRY FLAG. LOGIC IS DIFFERENT IF OPERATION
+        //       WAS A SINGLE BYTE OR TWO BYTES.
+        if (((result[0] ^ this.HL ^ value) & 0x1000) == 0x1000) {
+            this.setFlag(HALF_CARRY_FLAG);
+        } else {
+            this.clearFlag(HALF_CARRY_FLAG);
+        }
+
         this.HL = result[0];
         this.clearFlag(SUBTRACTION_FLAG);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
@@ -691,6 +701,9 @@ export class CPU {
         if (this.shouldDisableInterrupts()) {
             this.disableInterrupts();
         }
+
+        // TODO: Only increment if in debug mode
+        this.totalCpuInstructionsExecuted++;
 
         const op = this.bus.readByte(this.PC);
     	if (op === 0x31) {
@@ -860,6 +873,7 @@ export class CPU {
         } else if (op === 0x07) {
             // RLCA
             this.A = this.rotateLeft(this.A);
+            this.clearFlag(ZERO_FLAG);
             this.PC++;
             return 4;
         } else if (op === 0x08) {
@@ -986,7 +1000,7 @@ export class CPU {
         } else if (op === 0x2A) {
             // LD A, (HL+)     [1 byte, 8 cycles]
             this.A = this.bus.readByte(this.HL);
-            this.HL++;
+            this.incrementHL();
             this.PC++;
             return 8;
         } else if (op === 0xE2) {
@@ -1285,7 +1299,7 @@ export class CPU {
           // 'LD B, (HL)';
           this.B = this.bus.readByte(this.HL);
           this.PC++
-          return 4;
+          return 8;
         } else if (op === 0x45) {
             // 'LD B, L';
             this.B = this.L();
@@ -1467,7 +1481,7 @@ export class CPU {
         } else if (op === 0x22) {
             // LD (HL+),A
             this.bus.writeByte(this.HL, this.A);
-            this.HL++;
+            this.incrementHL();
             this.PC++;
             return 8;
         } else if (op === 0xCA) {
@@ -1493,7 +1507,7 @@ export class CPU {
             this.PC++;
             return 12;
         } else if (op === 0x09) {
-            // ADD HL,BC
+            // ADD HL, BC
             this.addToHLInstr(this.BC());
             this.PC++;
             return 8;
@@ -1654,7 +1668,7 @@ export class CPU {
             // 'LD H, (HL)';
             this.updateH(this.bus.readByte(this.HL));
             this.PC++;
-            return 4;
+            return 8;
         } else if (op === 0x67) {
             // 'LD H, A';
             this.updateH(this.A);
@@ -1748,17 +1762,37 @@ export class CPU {
             this.SP  = (this.SP - 1) & 0xFFFF;
             this.PC++;
             return 8
-        } else if ((op >= 0x70 && op <= 0x75) || op === 0x77) {
+        } else if (op === 0x73) {
+            // LD (HL), E
+            this.bus.writeByte(this.HL, this.E);
+            this.PC++;
+            return 8;
+        } else if (op === 0x72) {
+            // LD (HL), D
+            this.bus.writeByte(this.HL, this.D);
+            this.PC++;
+            return 8;
+        } else if (op === 0x71) {
+            // LD (HL), C
+            this.bus.writeByte(this.HL, this.C);
+            this.PC++;
+            return 8;
+        } else if (op === 0x70) {
+            // LD (HL), B
+            this.bus.writeByte(this.HL, this.B);
+            this.PC++;
+            return 8;
+        } else if (op === 0x77) {
+            // LD (HL), A
+            this.bus.writeByte(this.HL, this.A);
+            this.PC++;
+            return 8;
+        } else if (op === 0x74 || op === 0x75) {
             // LD (HL), n
 
             const valueMap = {
-                0x70: this.B,
-                0x71: this.C,
-                0x72: this.D,
-                0x73: this.E,
                 0x74: this.H(),
-                0x75: this.L(),
-                0x77: this.A
+                0x75: this.L()
             }
             this.bus.writeByte(this.HL, valueMap[op]);
             this.PC += 1;
@@ -1793,8 +1827,7 @@ export class CPU {
             return op === 0xB6 ? 8 : 4;
         } else if (op === 0x1E) {
             // LD E, d8
-            const value = this.bus.readByte(this.PC + 1);
-            this.E = value;
+            this.E = this.bus.readByte(this.PC + 1);
             this.PC += 2;
             return 8;
         } else if (op === 0xF6) {
@@ -1962,32 +1995,32 @@ export class CPU {
             this.PC++;
             return 4;
         } else if (op === 0x98) { 
-            this.sbcInstruction(this.B);
+            this.A = this.sbcInstruction(this.B);
             this.PC++;
             return 4;
         }  else if (op === 0x99) {
-            this.sbcInstruction(this.C);
+            this.A = this.sbcInstruction(this.C);
             this.PC++;
             return 4; 
         }  else if (op === 0x9A) {
-            this.sbcInstruction(this.D); 
+            this.A = this.sbcInstruction(this.D); 
             this.PC++;
             return 4;
         }  else if (op === 0x9B) {
-            this.sbcInstruction(this.E);
+            this.A = this.sbcInstruction(this.E);
             this.PC++;
             return 4;
         }  else if (op === 0x9C) {
-            this.sbcInstruction(this.H());
+            this.A = this.sbcInstruction(this.H());
             this.PC++;
             return 4; 
         }  else if (op === 0x9D) {
-            this.sbcInstruction(this.L());
+            this.A = this.sbcInstruction(this.L());
             this.PC++;
             return 4;
         }  else if (op === 0x9E) {
             const value = this.bus.readByte(this.HL);
-            this.sbcInstruction(value);
+            this.A = this.sbcInstruction(value);
             this.PC++;
             return 8;
         }  else if (op === 0x9F) {
@@ -2046,12 +2079,14 @@ export class CPU {
         } else if (op === 0x17) {
             // RLA
             this.A = this.rotateLeftThroughCarry(this.A);
+            this.clearFlag(ZERO_FLAG);
             this.PC++;
             return 4;
         } else if (op === 0x0F) {
             // RRCA
             // Rotate A right. Old bit 0 to Carry flag.
             this.A = this.rotateRight(this.A);
+            this.clearFlag(ZERO_FLAG);
             this.PC++;
             return 4;
         } else if (op === 0x23) {
@@ -2311,12 +2346,13 @@ export class CPU {
 
     private sbcInstruction(value) {
       const carryFlag = this.getFlag(CARRY_FLAG) ? 1 : 0;
-      this.subOneByte(this.A, value, carryFlag);
+      return this.subOneByte(this.A, value, carryFlag);
     }
 
+    // NO BUGS HERE. LITERALLY A PERFECT IMPLEMENTATION
     private daaInstruction() {
         if (!this.getFlag(SUBTRACTION_FLAG)) {
-            if (this.getFlag(HALF_CARRY_FLAG) || (this.A & 0xF) > 9) {
+            if (this.getFlag(HALF_CARRY_FLAG) || (this.A & 0x0F) > 9) {
               this.A += 0x06;
             }
 
@@ -2554,8 +2590,6 @@ export class Gameboy {
   private inFrameExecutionMode: boolean;
   private onFrame: any
 
-  private totalCpuInstructionsExecuted: number;
-
   constructor(opts: GameboyOptions) {
     const {
         inDebugMode = false,
@@ -2577,7 +2611,6 @@ export class Gameboy {
     this.debugger = new DebugConsole(this, readlineSync);
     this.inFrameExecutionMode = inFrameExecutionMode;
     this.onFrame = onFrame;
-    this.totalCpuInstructionsExecuted = 0;
   }
 
   public powerOn() {
@@ -2654,10 +2687,8 @@ export class Gameboy {
     // ExecuteNextInstruction will modify the PC register appropriately
     const cycles = this.cpu.executeInstruction();
     if (cycles === 0) {
-        console.log(`Executed total of ${this.totalCpuInstructionsExecuted} instructions`);
         return false;
     }
-    this.totalCpuInstructionsExecuted += cycles;
 
     if (prevProgramCounter === this.cpu.PC) {
         console.log(`Error: cpu.PC was not changed after last executeInstruction() call. Infinite loop`);
@@ -2692,7 +2723,6 @@ export class Gameboy {
 
   public async executeRom() {
     let keepRunning = true;
-    this.totalCpuInstructionsExecuted = 0;
 
     while (keepRunning) {
       if (this.inFrameExecutionMode) {
