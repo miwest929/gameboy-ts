@@ -2392,7 +2392,7 @@ export class CPU {
     }
 
     private rotateLeftThroughCarry(value: number): number {
-        const currCarry = this.Flags.carryFlag ? 0x01 : 0x00;
+        const currCarry = this.Flags.carryFlag;
         this.Flags.carryFlag = (value & 0x80) === 0x80;
         let updated = (value << 1);
         if (currCarry) {
@@ -2401,22 +2401,8 @@ export class CPU {
 
         this.clearFlag(ZERO_FLAG);
         if (updated === 0) {
-            this.setFlag(ZERO_FLAG)
+            this.setFlag(ZERO_FLAG);
         }
-        
-        this.clearFlag(SUBTRACTION_FLAG);
-        this.clearFlag(HALF_CARRY_FLAG);
-        return updated;
-    }
-
-    private rotateRight(value: number) {
-        const bit0 = (value & 0x01) === 0x01;
-        let updated = value >>> 1;
-        if (bit0) {
-            this.setFlag(CARRY_FLAG)
-            updated ^= 0x80
-        }
-        this.clearFlag(ZERO_FLAG);
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
@@ -2440,6 +2426,37 @@ export class CPU {
         return updated;
     }
 
+    private rotateRightThroughCarry(value: number): number {
+        // 1001 1010
+        // 0011 010[0] | [1]
+        const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
+        this.Flags.carryFlag = (value & 0x01) === 0x01;
+        let updated = (value >>> 1);
+        if (currCarry === 0x80) {
+          updated ^= currCarry;
+        }
+        this.Flags.zeroFlag = updated === 0x00;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;
+    }
+
+    private rotateRight(value: number) {
+        const bit0 = (value & 0x01) === 0x01;
+        let updated = value >>> 1;
+        if (bit0) {
+            this.setFlag(CARRY_FLAG)
+            updated ^= 0x80
+        }
+        this.clearFlag(ZERO_FLAG);
+        if (updated === 0) {
+            this.setFlag(ZERO_FLAG);
+        }
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;
+    }
+
     public shiftRightIntoCarry(value: number): number {
         this.clearFlag(CARRY_FLAG);
         if ((value & 0x01) === 0x01) {
@@ -2453,21 +2470,6 @@ export class CPU {
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;        
-    }
-
-    private rotateRightThroughCarry(value: number): number {
-        // 1001 1010
-        // 0011 010[0] | [1]
-        const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
-        this.Flags.carryFlag = (value & 0x01) === 0x01;
-        let updated = (value >>> 1);
-        if (currCarry === 0x80) {
-          updated ^= currCarry;
-        }
-        this.Flags.zeroFlag = updated === 0x00 ? true : false;
-        this.clearFlag(SUBTRACTION_FLAG);
-        this.clearFlag(HALF_CARRY_FLAG);
-        return updated;
     }
 
     private updateZeroFlagWithBit(value: number, bit: number) {
