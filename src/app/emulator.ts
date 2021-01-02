@@ -2398,7 +2398,12 @@ export class CPU {
         if (currCarry) {
             updated ^= 0x01;
         }
+
         this.clearFlag(ZERO_FLAG);
+        if (updated === 0) {
+            this.setFlag(ZERO_FLAG)
+        }
+        
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
@@ -2427,6 +2432,9 @@ export class CPU {
             updated ^= 0x01;
         }
         this.clearFlag(ZERO_FLAG);
+        if (updated === 0) {
+            this.setFlag(ZERO_FLAG);
+        }
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
