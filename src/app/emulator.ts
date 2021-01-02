@@ -2102,16 +2102,288 @@ export class CPU {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
             switch (nextInstrByte) {
-            case 0x37:
-                // SWAP A
-                this.swapNibblesOf(this.A);
+            case 0x00:
+                // RLC B
+                this.B = this.rotateLeft(this.B);
                 this.PC += 2;
                 return 8;
+            case 0x01:
+                // RLC C
+                this.C = this.rotateLeft(this.C);
+                this.PC += 2;
+                return 8;  
+            case 0x02:
+                // RLC D
+                this.D = this.rotateLeft(this.D);
+                this.PC += 2;
+                return 8;  
+            case 0x03:
+                // RLC E
+                this.E = this.rotateLeft(this.E);
+                this.PC += 2;
+                return 8;      
+            case 0x04:
+                // RLC H
+                this.updateH(
+                    this.rotateLeft(this.H())
+                );
+                this.PC += 2;
+                return 8; 
+            case 0x05:
+                // RLC L
+                this.updateL(
+                    this.rotateLeft(this.L())
+                );
+                this.PC += 2;
+                return 8;          
+            case 0x06:
+                // RLC (HL)
+                let b = this.bus.readByte(this.HL);
+                b = this.rotateLeft(b);
+                this.bus.writeByte(this.HL, b);
+                this.PC += 2;
+                return 8;
+            case 0x07:
+                // RLC A
+                this.A = this.rotateLeft(this.A);
+                this.PC += 2;
+                return 8;
+            case 0x08:
+                // RRC B
+                this.B = this.rotateRight(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x09:
+                // RRC C
+                this.C = this.rotateRight(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x0A:
+                // RRC D
+                this.D = this.rotateRight(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x0B:
+                // RRC E
+                this.E = this.rotateRight(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x0C:
+                // RRC H
+                this.updateH(
+                    this.rotateRight(this.H())
+                );
+                this.PC += 2;
+                return 8;
+            case 0x0D:
+                // RRC L
+                this.updateL(
+                    this.rotateRight(this.L())
+                );
+                this.PC += 2;
+                return 8;
+            case 0x0E:
+                // RRC (HL)
+                let b2 = this.bus.readByte(this.HL);
+                b2 = this.rotateRight(b2);
+                this.bus.writeByte(this.HL, b2);
+                this.PC += 2;
+                return 8;
+            case 0x0F:
+                // RRC A
+                this.A = this.rotateRight(this.A);
+                this.PC += 2;
+                return 8;
+            case 0x10:
+                // RL B
+                this.B = this.rotateLeftThroughCarry(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x11:
+                // RL C
+                this.C = this.rotateLeftThroughCarry(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x12:
+                // RL D
+                this.D = this.rotateLeftThroughCarry(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x13:
+                // RL E
+                this.E = this.rotateLeftThroughCarry(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x14:
+                // RL H
+                this.updateH(
+                    this.rotateLeftThroughCarry(this.H())
+                );
+                this.PC += 2;
+                return 8;
+            case 0x15:
+                // RL L
+                this.updateL(
+                    this.rotateLeftThroughCarry(this.L())
+                );
+                this.PC += 2;
+                return 8;
+            case 0x16:
+                // RL (HL)
+                let b3 = this.bus.readByte(this.HL);
+                b3 = this.rotateLeftThroughCarry(b3);
+                this.bus.writeByte(this.HL, b3);
+                this.PC += 2;
+                return 8;
+            case 0x17:
+                // RL A
+                this.A = this.rotateLeftThroughCarry(this.A);
+                this.PC += 2;
+                return 8;                
+            case 0x18:
+                // 'RR B'
+                this.B = this.rotateRightThroughCarry(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x19:
+                // 'RR C'
+                // Rotate n right through Carry flag.
+                this.C = this.rotateRightThroughCarry(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x1A:
+                // 'RR D';
+                this.D = this.rotateRightThroughCarry(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x1B:
+                // 'RR E';
+                this.E = this.rotateRightThroughCarry(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x1C:
+                // 'RR H';
+                this.updateH( this.rotateRightThroughCarry(this.H()) );
+                this.PC += 2;
+                return 8;
+            case 0x1D:
+                // 'RR L';
+                this.updateL( this.rotateRightThroughCarry(this.L()) );
+                this.PC += 2;
+                return 8;
+            case 0x1E:
+                // 'RR (HL)';
+                const b6 = this.bus.readByte(this.HL);
+                this.bus.writeByte(this.HL, this.rotateRightThroughCarry(b6) );
+                this.PC += 2;
+                return 16;
+            case 0x1F:
+                // 'RR A';
+                this.A = this.rotateRightThroughCarry(this.A);
+                this.PC += 2;
+                return 8;
+            case 0x20:
+                // SLA B
+                this.B = this.shiftLeftIntoCarry(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x21:
+                // SLA C
+                this.C = this.shiftLeftIntoCarry(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x22:
+                // SLA D
+                this.D = this.shiftLeftIntoCarry(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x23:
+                // SLA E
+                this.E = this.shiftLeftIntoCarry(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x24:
+                // SLA H
+                this.updateH( this.shiftLeftIntoCarry(this.H()) );
+                this.PC += 2;
+                return 8;
+            case 0x25:
+                // SLA L
+                this.updateL( this.shiftLeftIntoCarry(this.L()) );
+                this.PC += 2;
+                return 8;
+            case 0x26:
+                // SLA (HL)
+                const b4 = this.bus.readByte(this.HL);
+                this.bus.writeByte(this.HL, this.shiftLeftIntoCarry(b4));
+            case 0x27:
+                // SLA A
+                // Shift n left into Carry. LSB of n set to 0
+                this.A = this.shiftLeftIntoCarry(this.A);
+                this.PC += 2;
+                return 8;
+            case 0x28:
+                // SRA B
+                this.B = this.shiftRightIntoCarry(this.B);
+                this.PC += 2;
+                return 8;
+            case 0x29:
+                // SRA C
+                this.C = this.shiftRightIntoCarry(this.C);
+                this.PC += 2;
+                return 8;
+            case 0x2A:
+                // SRA D
+                this.D = this.shiftRightIntoCarry(this.D);
+                this.PC += 2;
+                return 8;
+            case 0x2B:
+                // SRA E
+                this.E = this.shiftRightIntoCarry(this.E);
+                this.PC += 2;
+                return 8;
+            case 0x2C:
+                // SRA H
+                this.updateH( this.shiftRightIntoCarry(this.H()) );
+                this.PC += 2;
+                return 8;
+            case 0x2D:
+                // SRA L
+                this.updateL( this.shiftRightIntoCarry(this.L()) );
+                this.PC += 2;
+                return 8;
+            case 0x2E:
+                // SRA (HL)
+                const b5 = this.bus.readByte(this.HL);
+                this.bus.writeByte(this.HL, this.shiftRightIntoCarry(b5));
+                this.PC += 2;
+                return 8;
+            case 0x2F:
+                // SRA A
+                this.A = this.shiftRightIntoCarry(this.A);
+                this.PC += 2;
+                return 8;
+
+            // case 0x27:
+            //     // SLA A
+            //     // Shift n left into Carry. LSB of n set to 0
+            //     if ((this.A & 0x80) === 0x80) {
+            //         this.setFlag(HALF_CARRY_FLAG);
+            //     } else {
+            //         this.clearFlag(HALF_CARRY_FLAG);
+            //     }
+            //     this.A = this.A << 1;
+            //     this.clearFlag(SUBTRACTION_FLAG);
+            //     this.clearFlag(CARRY_FLAG)
+            //     this.updateZeroFlag(this.A);
+
+            //     this.PC += 2;
+            //     return 8;
             case 0x30:
                 // SWAP B
                 this.swapNibblesOf(this.B);
                 this.PC += 2;
-                return 8;
+                return 8; 
             case 0x31:
                 // SWAP C
                 this.swapNibblesOf(this.C);
@@ -2145,7 +2417,12 @@ export class CPU {
                 const swapped = this.swapNibblesOf(swapValue);
                 this.bus.writeByte(this.HL, swapped);
                 this.PC += 2;
-                return 16;
+                return 16; 
+            case 0x37:
+                // SWAP A
+                this.swapNibblesOf(this.A);
+                this.PC += 2;
+                return 8;
             case 0x87:
                 // 'RES 0, A'
                 // Reset bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
@@ -2158,21 +2435,6 @@ export class CPU {
                 this.bus.writeByte(this.HL, hlValue);
                 this.PC += 2;
                 return 16;
-            case 0x27:
-                // SLA A
-                // Shift n left into Carry. LSB of n set to 0
-                if ((this.A & 0x80) === 0x80) {
-                    this.setFlag(HALF_CARRY_FLAG);
-                } else {
-                    this.clearFlag(HALF_CARRY_FLAG);
-                }
-                this.A = this.A << 1;
-                this.clearFlag(SUBTRACTION_FLAG);
-                this.clearFlag(CARRY_FLAG)
-                this.updateZeroFlag(this.A);
-
-                this.PC += 2;
-                return 8;
             case 0x78:
                 // BIT 7, B
                 this.updateZeroFlagWithBit(this.B, 7);
@@ -2252,48 +2514,6 @@ export class CPU {
             case 0x57:
                 // 'BIT 2, A';
                 this.updateZeroFlagWithBit(this.A, 2);
-                this.PC += 2;
-                return 8;
-            case 0x19:
-                // 'RR C';
-                // Rotate n right through Carry flag.
-                this.C = this.rotateRightThroughCarry(this.C);
-                this.PC += 2;
-                return 8;
-            case 0x18:
-                // 'RR B';
-                this.B = this.rotateRightThroughCarry(this.B);
-                this.PC += 2;
-                return 8;
-            case 0x1A:
-                // 'RR D';
-                this.D = this.rotateRightThroughCarry(this.D);
-                this.PC += 2;
-                return 8;
-            case 0x1B:
-                // 'RR E';
-                this.E = this.rotateRightThroughCarry(this.E);
-                this.PC += 2;
-                return 8;
-            case 0x1C:
-                // 'RR H';
-                this.updateH( this.rotateRightThroughCarry(this.H()) );
-                this.PC += 2;
-                return 8;
-            case 0x1D:
-                // 'RR L';
-                this.updateL( this.rotateRightThroughCarry(this.L()) );
-                this.PC += 2;
-                return 8;
-            case 0x1E:
-                // 'RR (HL)';
-                const value = this.bus.readByte(this.HL);
-                this.bus.writeByte(this.HL, this.rotateRightThroughCarry(value) );
-                this.PC += 2;
-                return 16;
-            case 0x1F:
-                // 'RR A';
-                this.A = this.rotateRightThroughCarry(this.A);
                 this.PC += 2;
                 return 8;
             case 0x38:
@@ -2394,15 +2614,12 @@ export class CPU {
     private rotateLeftThroughCarry(value: number): number {
         const currCarry = this.Flags.carryFlag;
         this.Flags.carryFlag = (value & 0x80) === 0x80;
-        let updated = (value << 1);
+        let updated = value << 1;
         if (currCarry) {
             updated ^= 0x01;
         }
 
-        this.clearFlag(ZERO_FLAG);
-        if (updated === 0) {
-            this.setFlag(ZERO_FLAG);
-        }
+        this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
@@ -2417,10 +2634,8 @@ export class CPU {
             this.setFlag(CARRY_FLAG);
             updated ^= 0x01;
         }
-        this.clearFlag(ZERO_FLAG);
-        if (updated === 0) {
-            this.setFlag(ZERO_FLAG);
-        }
+
+        this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
@@ -2431,10 +2646,12 @@ export class CPU {
         // 0011 010[0] | [1]
         const currCarry = this.Flags.carryFlag ? 0x80 : 0x00;
         this.Flags.carryFlag = (value & 0x01) === 0x01;
-        let updated = (value >>> 1);
+        let updated = value >>> 1;
+
         if (currCarry === 0x80) {
           updated ^= currCarry;
         }
+
         this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
@@ -2444,29 +2661,55 @@ export class CPU {
     private rotateRight(value: number) {
         const bit0 = (value & 0x01) === 0x01;
         let updated = value >>> 1;
+
+        this.clearFlag(CARRY_FLAG);
         if (bit0) {
             this.setFlag(CARRY_FLAG)
             updated ^= 0x80
         }
-        this.clearFlag(ZERO_FLAG);
-        if (updated === 0) {
-            this.setFlag(ZERO_FLAG);
-        }
+
+        this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;
     }
 
+    // 0x28 - 0x2F
     public shiftRightIntoCarry(value: number): number {
         this.clearFlag(CARRY_FLAG);
         if ((value & 0x01) === 0x01) {
             this.setFlag(CARRY_FLAG);
         }
-        const updated = value >>> 1;
-        this.clearFlag(ZERO_FLAG);
-        if (updated === 0) {
-            this.setFlag(ZERO_FLAG);
+        const updated = (value >>> 1); //| (value & 0x80);
+
+        this.Flags.zeroFlag = updated === 0x00;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;        
+    }
+
+    public shiftLeftIntoCarry(value: number): number {
+        this.clearFlag(CARRY_FLAG);
+        if ((value & 0x80) === 0x80) {
+            this.setFlag(CARRY_FLAG);
         }
+        const updated = value << 1;
+
+        this.Flags.zeroFlag = updated === 0x00;
+        this.clearFlag(SUBTRACTION_FLAG);
+        this.clearFlag(HALF_CARRY_FLAG);
+        return updated;        
+    }
+
+    public shiftRight(value: number): number {
+        this.clearFlag(CARRY_FLAG);
+        if ((value & 0x01) === 0x01) {
+            this.setFlag(CARRY_FLAG);
+        }
+
+        const updated = value >>> 1;
+
+        this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
         return updated;        
