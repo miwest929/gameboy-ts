@@ -1,6 +1,29 @@
 import { Gameboy, ZERO_FLAG, SUBTRACTION_FLAG, HALF_CARRY_FLAG, CARRY_FLAG } from "./emulator";
 import { loadTextFile, displayAsHex } from "./utils";
 
+export class InstructionsTracker {
+    public instructionMap: object;
+
+    constructor() {
+      this.instructionMap = {};
+    }
+
+    public register(opcode: number) {
+        const opKey = displayAsHex(opcode);
+        if (opKey in this.instructionMap) {
+            this.instructionMap[opKey]++;
+        } else {
+            this.instructionMap[opKey] = 1;
+        }
+    }
+
+    public difference(tracker: InstructionsTracker) {
+        const theirKeys = Object.keys(tracker.instructionMap);
+        const ourKeys = Object.keys(this.instructionMap);
+        return ourKeys.filter(x => !theirKeys.includes(x));
+    }
+}
+
 export function loadBreakpoints(filename: string): Breakpoint[] {
     const breakpointsContents = loadTextFile(filename);
 
@@ -59,7 +82,7 @@ export class AddressCondBreakpoint {
 
     static from(args: string[]): AddressCondBreakpoint {
         const addr = parseInt(args[0], 16);
-        const aValue = parseInt(args[0], 16);
+        const aValue = parseInt(args[1], 16);
         return new AddressCondBreakpoint(addr, aValue);
     }
 }
