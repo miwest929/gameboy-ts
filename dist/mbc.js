@@ -39,34 +39,51 @@ class MBC1 extends MemoryBankController {
         this.currentRAMBank = 0;
         this.romSize = romSize;
         this.romBanks = this.populateROMBanks(romBytes, romSize / 0x4000);
+        this.isRamEnabled = false;
     }
     WriteByte(addr, value) {
         if (addr >= 0x2000 && addr <= 0x3FFF) {
-            this.switchROMBank(value % 0x1F);
+            // Quirk of MBC1. Ref: https://b13rg.github.io/Gameboy-Bank-Switching/
+            if (value === 0x00) {
+                this.switchROMBank(1);
+            }
+            else if (value in [0x20, 0x40, 0x60]) {
+                this.switchROMBank(value + 1);
+            }
+            else {
+                this.switchROMBank(value % 0x1F);
+            }
         }
         else if (addr >= 0x4000 && addr <= 0x5FFF) {
             this.switchRAMBank(value % 0x03);
+        }
+        else if (addr >= 0x0000 && addr <= 0x1FFF) {
+            // enable RAM when lower 4 bits of 'value' is 0x0A
+            this.isRamEnabled = (value & 0x0F) === 0x0A;
         }
     }
     ReadByte(addr) {
         if (addr < 0x4000) { // return from first ROM Bank
             return this.romBanks[0][addr];
         }
-        else if (addr >= 0x4000 && addr < 0x8000) { //Switchable ROM BANK
+        else if (addr >= 0x4000 && addr < 0x8000) { // Switchable ROM BANK
+            // console.log(`addr = ${displayAsHex(addr)}, currentBank = ${this.currentROMBank}`);
             return this.romBanks[this.currentROMBank][addr - 0x4000];
+        }
+        else if (addr >= 0xA000 && addr < 0xBFFF) { // Switchable RAM BANK
         }
     }
     switchROMBank(newROMBank) {
         if (newROMBank === 0x00) {
             newROMBank = 0x01;
         }
-        console.log(`SWITCHING ROM BANKS to ${newROMBank}`);
+        utils_1.debugLog(`Switching ROM bank to ${newROMBank}`);
         this.currentROMBank = newROMBank;
     }
     switchRAMBank(newRAMBank) {
-        console.log(`switch RAM bank to ${newRAMBank}`);
-        throw new Error(`Switching RAM banks is not supported`);
+        utils_1.debugLog(`Switching RAM bank to ${newRAMBank}`);
         this.currentRAMBank = newRAMBank;
+        throw new Error(`Switching RAM banks is not supported`);
     }
 }
 exports.MBC1 = MBC1;

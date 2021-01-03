@@ -45,7 +45,7 @@ async function execute() {
     const gameboy = new emulator_1.Gameboy({ inDebugMode: debugMode, readlineSync: readlineSync, inFrameExecutionMode: isFrameExecution });
     const cart = new emulator_1.Cartridge(romFilename); // second arg is for fromLocalFileSystem
     await gameboy.loadCartridge(cart);
-    console.log(cart.getRomHeaderInfo());
+    cart.displayRomHeader();
     console.log('Powered on. Executing rom program');
     gameboy.powerOn();
     gameboy.executeRom(); // TODO: Better interface is to pass the Cartridge instance to this function....

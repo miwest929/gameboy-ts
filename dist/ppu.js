@@ -263,6 +263,7 @@ class PPU {
         this.oam = new Uint8Array(OAM_SIZE_BYTES);
         this.clock = 0x00;
         this.LY = 0x00;
+        this.LYC = 0x00;
         this.SCROLL_X = 0x00;
         this.SCROLL_Y = 0x00;
         this.WINDOWX = 0x00;
@@ -310,6 +311,16 @@ class PPU {
         else if (addr === Address.OBP1_ADDR) {
             this.OBP1_PALETTE.update(value);
         }
+        else if (addr === Address.LYC_ADDR) {
+            this.LYC = value;
+        }
+        else if (addr === Address.DMA_ADDR) {
+            // const srcBeginAddr = (value << 8) | 0x00;
+            // for (let offset = 0x00; offset <= 0x9F; offset++) {
+            //     const value = this.bus.readByte(srcBeginAddr + offset);
+            //     this.writeToOAM(0xFE00 + offset, value);
+            // }
+        }
         else {
             console.error(`Don't support writing to special reg at addr ${addr}`);
         }
@@ -349,6 +360,16 @@ class PPU {
         else if (addr === Address.OBP0_ADDR) {
         }
         else if (addr === Address.OBP1_ADDR) {
+        }
+        else if (addr === Address.LYC_ADDR) {
+            // LYC
+            // When both LYC and LY registers are identical, the coincident bit in the
+            // STAT register becomes set, and (if enabled) a STAT interrupt is requested
+            return this.LYC;
+        }
+        else if (addr === Address.DMA_ADDR) {
+            // WRITE-ONLY
+            return 0x00;
         }
         else {
             console.error(`Don't support reading to special reg at addr ${addr}`);
@@ -400,6 +421,10 @@ class PPU {
             else if (this.LY > 153) {
                 this.LCDC_STATUS.updateModeFlag(LCDC_MODES.SearchingVRAMPeriod);
                 this.LY = 0;
+            }
+            if (this.LCDC_STATUS.CoincidenceInterruptStatus && this.LY === this.LYC) {
+                this.LCDC_STATUS.CoincidenceFlag = 'LYC_EQ_LY';
+                this.bus.RequestInterrupt(emulator_1.Interrupt.LCDCSTAT);
             }
             // Render scanline
             if (this.LY < 144) {

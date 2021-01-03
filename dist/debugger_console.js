@@ -1,21 +1,35 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DebugConsole = exports.AddressRangeValueChangeBreakpoint = exports.AddressValueChangeBreakpoint = exports.OpCodeBreakpoint = exports.AddressBreakpoint = exports.loadBreakpoints = void 0;
+exports.DebugConsole = exports.AddressRangeValueChangeBreakpoint = exports.AddressValueChangeBreakpoint = exports.OpCodeBreakpoint = exports.AddressBreakpoint = exports.AddressCondBreakpoint = exports.loadBreakpoints = exports.InstructionsTracker = void 0;
 const emulator_1 = require("./emulator");
 const utils_1 = require("./utils");
+class InstructionsTracker {
+    constructor() {
+        this.instructionMap = {};
+    }
+    register(opcode) {
+        const opKey = utils_1.displayAsHex(opcode);
+        if (opKey in this.instructionMap) {
+            this.instructionMap[opKey]++;
+        }
+        else {
+            this.instructionMap[opKey] = 1;
+        }
+    }
+    difference(tracker) {
+        const theirKeys = Object.keys(tracker.instructionMap);
+        const ourKeys = Object.keys(this.instructionMap);
+        return ourKeys.filter(x => !theirKeys.includes(x));
+    }
+}
+exports.InstructionsTracker = InstructionsTracker;
 function loadBreakpoints(filename) {
     const breakpointsContents = utils_1.loadTextFile(filename);
-    const breakpoints = [];
     if (breakpointsContents === "") {
         return [];
     }
-    for (const line of breakpointsContents.split("\n")) {
-        const bp = Breakpoint.from(line);
-        if (bp) {
-            breakpoints.push(bp);
-        }
-    }
-    return breakpoints;
+    const lines = breakpointsContents.split("\n");
+    return lines.map((l) => Breakpoint.from(l)).filter((bp) => bp);
 }
 exports.loadBreakpoints = loadBreakpoints;
 class Breakpoint {
@@ -26,6 +40,9 @@ class Breakpoint {
         if (cmd === "address") {
             const addr = parseInt(args[0], 16);
             return new AddressBreakpoint(addr);
+        }
+        else if (cmd === "addresscond") {
+            return AddressCondBreakpoint.from(args);
         }
         else if (cmd === "address-value-change") {
             const addr = parseInt(args[0], 16);
@@ -42,6 +59,25 @@ class Breakpoint {
         }
     }
 }
+// trigger breakpoint when PC == <address> and <value-of-A-register> == <aValue>
+class AddressCondBreakpoint {
+    constructor(address, aValue) {
+        this.address = address;
+        this.aValue = aValue;
+    }
+    hasTriggered(gb) {
+        return gb.cpu.PC === this.address && gb.cpu.A === this.aValue;
+    }
+    toString() {
+        return `<AddressCondBreakpoint addr=${utils_1.displayAsHex(this.address)}, aValue=${utils_1.displayAsHex(this.aValue)}>`;
+    }
+    static from(args) {
+        const addr = parseInt(args[0], 16);
+        const aValue = parseInt(args[1], 16);
+        return new AddressCondBreakpoint(addr, aValue);
+    }
+}
+exports.AddressCondBreakpoint = AddressCondBreakpoint;
 class AddressBreakpoint {
     constructor(address) {
         this.address = address;
@@ -97,6 +133,7 @@ class DebugConsole {
         this.gameboy = gb;
         this.breakpoints = loadBreakpoints("./breakpoints");
         this.pastAddresses = [0x100]; // 0x100 is the address start executing..
+        this.tracedAddresses = [];
         this.readlineSync = readlineSync;
     }
     breakpointTriggered() {
@@ -178,6 +215,9 @@ class DebugConsole {
     inDebuggerActive() {
         return this.inDebuggerMode;
     }
+    recordAddress(cpu) {
+        this.tracedAddresses.push(cpu.PC);
+    }
     showConsole() {
         // When true the reply will continue to prompt user for debugger commands
         // the NEXT and CONTINUE command will exit this loop
@@ -205,14 +245,27 @@ class DebugConsole {
             else if (command.startsWith('readmem')) {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
+                console.log(`[readmem] addr = ${utils_1.displayAsHex(addr)}, addr (base10) = ${addr}`);
                 this.displayMemoryAddressValue(addr);
             }
-            else if (command === "setbp" || command === "setbreakpoint") {
-                console.log("SETTING A BREAKPOINT");
+            else if (command.startsWith("setbp") || command.startsWith("setbreakpoint")) {
                 const args = command.split(' ').slice(1);
                 const addr = parseInt(args[0], 16);
                 this.breakpoints.push(new AddressBreakpoint(addr));
                 console.log(`Set new breakpoint at address 0x${utils_1.displayAsHex(addr)}`);
+            }
+            else if (command.startsWith("delbp") || command.startsWith("removebreakpoint")) {
+                const args = command.split(' ').slice(1);
+                const addr = parseInt(args[0], 16);
+                const idx = this.breakpoints.findIndex((bp) => { return bp.address === addr; });
+                if (idx !== -1) {
+                    this.breakpoints.splice(idx, 1);
+                    console.log(`Remove address breakpoint at address ${utils_1.displayAsHex(addr)}`);
+                }
+            }
+            else if (command === "empty" || command === "removeallbreakpoints") {
+                this.breakpoints = [];
+                console.log("Removed all breakpoints");
             }
             else if (command === "listbp") {
                 console.log("Following are the Address breakpoints:");
@@ -222,8 +275,10 @@ class DebugConsole {
             }
             else if (command === "trace") {
                 // Display list of call addresses. Every time a call happens its address will be traced
-                const formattedAddrs = this.pastAddresses.map((a) => utils_1.displayAsHex(a));
-                console.log(`Address call stack: ${formattedAddrs.join(', ')}`);
+                //const formattedAddrs = this.pastAddresses.map((a) => displayAsHex(a));
+                //console.log(`Address call stack: ${formattedAddrs.join(', ')}`);
+                console.log(`Past 40 addresses:`);
+                console.log(this.tracedAddresses.reverse().slice(0, 40).map((a) => utils_1.displayAsHex(a)).join(", "));
             }
         }
     }
