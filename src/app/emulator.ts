@@ -3019,11 +3019,13 @@ export class Gameboy {
         hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
 
         // screen finished rendering so invoke passed in onFrame callback
-        this.onFrame(this.ppu.getScreenBuffer());
+        //this.onFrame(this.ppu.getScreenBuffer());
 
         instructionsExecuted++;
     }
     console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
+    // screen finished rendering so invoke passed in onFrame callback
+    this.onFrame(this.ppu.getScreenBuffer());
 
     return keepRunning;
   }

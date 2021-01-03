@@ -172,7 +172,7 @@ class MemoryBus {
             this.ppu.writeSpecialRegister(addr, value);
         }
         else if (addr === 0xFF01) {
-            console.log(`OUT: ${String.fromCharCode(value)} (${utils_1.displayAsHex(value)}), PC = ${utils_1.displayAsHex(this.cpu.PC)}`);
+            //console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
         }
         else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             // console.warn("I/O Registers aren't supported yet");
@@ -3024,10 +3024,12 @@ class Gameboy {
             keepRunning = await this.executeNextTick();
             hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
             // screen finished rendering so invoke passed in onFrame callback
-            this.onFrame(this.ppu.getScreenBuffer());
+            //this.onFrame(this.ppu.getScreenBuffer());
             instructionsExecuted++;
         }
         console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
+        // screen finished rendering so invoke passed in onFrame callback
+        this.onFrame(this.ppu.getScreenBuffer());
         return keepRunning;
     }
     readNextOpCode() {

@@ -161,11 +161,6 @@
         "signature": "d2f31f19e1ba6ed59be9259d660a239d9a3fcbbc8e038c6b2009bde34b175fed",
         "affectsGlobalScope": false
       },
-      "../src/app/cpu_test.ts": {
-        "version": "b7adf30902dd737dd9d9e4f01999ecca1b69be54ae96b059c26a15017033cde2",
-        "signature": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
-        "affectsGlobalScope": false
-      },
       "../src/app/rom_loader.ts": {
         "version": "d0d08fa91f39634bcf8b544cbdcb18e773c489bd2dbad399ad709112cf3c113e",
         "signature": "5d5f2c647ee558c21779e8ea8d9c35391e93f51ce9097d2238f517f2db04d167",
@@ -197,8 +192,8 @@
         "affectsGlobalScope": false
       },
       "../src/app/emulator.ts": {
-        "version": "a5dc87532d708e9fcb14677a3b947e1a04d506a420e000d8425a1da69f6a122b",
-        "signature": "baee7f6def40c8e7d3317e637c92c784f187f1e591e753e54dec264c201e0874",
+        "version": "f587b9146c78ba0ac34dfff79aabff6f39ceb648b48947ac72ab8351ed91f7b3",
+        "signature": "8fb3daf3b24032157ffee2aa0ec84bd3447c63786d373fd6ab6c67209a7c7696",
         "affectsGlobalScope": false
       },
       "../src/app/debugger_console.ts": {
@@ -1351,12 +1346,6 @@
         "../node_modules/@types/node/ts3.4/fs.d.ts",
         "../node_modules/@types/node/ts3.4/util.d.ts"
       ],
-      "../src/app/cpu_test.ts": [
-        "../node_modules/@types/node/ts3.1/fs.d.ts",
-        "../node_modules/@types/node/ts3.1/util.d.ts",
-        "../node_modules/@types/node/ts3.4/fs.d.ts",
-        "../node_modules/@types/node/ts3.4/util.d.ts"
-      ],
       "../src/app/debugger_console.ts": [
         "../node_modules/@types/node/ts3.1/fs.d.ts",
         "../node_modules/@types/node/ts3.1/util.d.ts",
@@ -2306,19 +2295,6 @@
       "../node_modules/typescript/lib/lib.esnext.intl.d.ts",
       "../node_modules/typescript/lib/lib.scripthost.d.ts",
       "../node_modules/typescript/lib/lib.webworker.importscripts.d.ts",
-      [
-        "../src/app/cpu_test.ts",
-        [
-          {
-            "file": "../src/app/cpu_test.ts",
-            "start": 78,
-            "length": 21,
-            "messageText": "Cannot find module '../src/app/emulator' or its corresponding type declarations.",
-            "category": 1,
-            "code": 2307
-          }
-        ]
-      ],
       "../src/app/debugger_console.ts",
       "../src/app/disassembler.ts",
       "../src/app/emulator.ts",
