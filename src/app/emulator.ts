@@ -197,7 +197,7 @@ export class MemoryBus {
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr === 0xFF01) {
-            console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
+            //console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             // console.warn("I/O Registers aren't supported yet");
         } else if (addr >= 0x0000 && addr <= 0x7FFF) {
@@ -396,7 +396,11 @@ export class CPU {
 
     public incrementH() {
         const result = wrappingByteAdd(this.H(), 1);
-        this.updateHalfCarryFlag(this.H(), 1);
+        //this.updateHalfCarryFlag(this.H(), 1);
+        this.clearFlag(HALF_CARRY_FLAG);
+        if (((result[0] ^ this.H() ^ 1) & 0x10) == 0x10) {
+            this.setFlag(HALF_CARRY_FLAG);
+        }
         this.updateH(result[0]);
         this.updateZeroFlag(this.H());
         this.clearFlag(SUBTRACTION_FLAG);
@@ -404,7 +408,11 @@ export class CPU {
 
     public incrementL() {
         const result = wrappingByteAdd(this.L(), 1);
-        this.updateHalfCarryFlag(this.L(), 1);
+        //this.updateHalfCarryFlag(this.L(), 1);
+        this.clearFlag(HALF_CARRY_FLAG);
+        if (((result[0] ^ this.L() ^ 1) & 0x10) == 0x10) {
+            this.setFlag(HALF_CARRY_FLAG);
+        }
         this.updateL(result[0]);
         this.updateZeroFlag(this.L());
         this.clearFlag(SUBTRACTION_FLAG);
@@ -471,7 +479,11 @@ export class CPU {
     // Sets flags and returns the new value for the register
     public incrementRegister(regValue: number) {
         const result = wrappingByteAdd(regValue, 1);
-        this.updateHalfCarryFlag(regValue, 1);
+        //this.updateHalfCarryFlag(regValue, 1);
+        this.clearFlag(HALF_CARRY_FLAG);
+        if (((result[0] ^ regValue ^ 1) & 0x10) == 0x10) {
+            this.setFlag(HALF_CARRY_FLAG);
+        }
         this.clearFlag(SUBTRACTION_FLAG);
         this.updateZeroFlag(result[0]);
         return result[0];
@@ -479,7 +491,11 @@ export class CPU {
 
     public addOneByte(val1: number, val2: number, carryVal = 0) {
         const result = wrappingByteAdd(val1, val2 + carryVal);
-        this.updateHalfCarryFlag(val1, val2 + carryVal);
+        //this.updateHalfCarryFlag(val1, val2 + carryVal);
+        this.clearFlag(HALF_CARRY_FLAG);
+        if (((result[0] ^ val1 ^ (val2 + carryVal)) & 0x10) == 0x10) {
+            this.setFlag(HALF_CARRY_FLAG);
+        }
         this.clearFlag(SUBTRACTION_FLAG);
         result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
         this.updateZeroFlag(result[0]);
@@ -904,7 +920,8 @@ export class CPU {
                 this.PC = addr;
                 return 16;
             } else {
-                this.PC += 2;
+                // instruction is 3 bytes long
+                this.PC += 3;
                 return 12;
             }
         } else if (op === 0x10) {
@@ -944,10 +961,7 @@ export class CPU {
         } else if (op === 0xFF) {
             // Push present address onto stack. Jump to address $0000 + 56 (0x38).
             // RST 38H
-            this.PC++; // push the next address onto the stack
-            //this.stackPush(this.PC & 0x00FF);
-            //this.stackPush((this.PC >> 8);
-            this.PC = 0x38;
+            this.rstInstruction(0x38); // fn changes PC address
             return 16;
         } else if (op === 0x3E) {
             // LD A, d8
@@ -1379,7 +1393,11 @@ export class CPU {
         } else if (op === 0x87) {
             // ADD A, A;
             const result = wrappingByteAdd(this.A, this.A);
-            this.updateHalfCarryFlag(this.A, this.A);
+//            this.updateHalfCarryFlag(this.A, this.A);
+            this.clearFlag(HALF_CARRY_FLAG);
+            if (((result[0] ^ this.A ^ this.A) & 0x10) == 0x10) {
+                this.setFlag(HALF_CARRY_FLAG);
+            }
             this.A = result[0];
             this.clearFlag(SUBTRACTION_FLAG);
             result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
@@ -1466,7 +1484,14 @@ export class CPU {
             const value = this.bus.readByte(this.PC + 1);
             const offset = makeSigned(value, 1);
             const result = wrappingTwoByteAdd(this.SP, offset);
-            this.updateHalfCarryFlag(this.SP, offset);
+
+            //this.updateHalfCarryFlag(this.SP, offset);
+            if (((result[0] ^ this.SP ^ offset) & 0x1000) == 0x1000) {
+                this.setFlag(HALF_CARRY_FLAG);
+            } else {
+                this.clearFlag(HALF_CARRY_FLAG);
+            }
+    
             result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
             this.clearFlag(ZERO_FLAG);
             this.clearFlag(SUBTRACTION_FLAG);
@@ -1718,10 +1743,10 @@ export class CPU {
                 this.pushAddressOnStack(this.PC + 3);
                 this.PC = addr;
                 return 24;
+            } else {
+                this.PC += 3;
+                return 12;
             }
-
-            this.PC += 3;
-            return 12;
         } else if (op === 0xD6) {
             // SUB d8
             const value = this.bus.readByte(this.PC + 1);
@@ -1801,6 +1826,11 @@ export class CPU {
             this.bus.writeByte(this.HL, valueMap[op]);
             this.PC += 1;
             return 8;
+        } else if (op === 0x76) {
+            // HALT
+            // TODO: Halt CPU until interrupt occurs
+            this.PC++;
+            return 4;
         } else if (op === 0xF9) {
           // LD SP, HL
           this.SP = this.HL
@@ -1874,14 +1904,22 @@ export class CPU {
               0x34: () => {
                   const value = this.bus.readByte(this.HL);
                   const [result,] = wrappingByteAdd(value, 1);
-                  this.updateHalfCarryFlag(value, 1);
+                  //this.updateHalfCarryFlag(value, 1);
+                  this.clearFlag(HALF_CARRY_FLAG);
+                  if (((result[0] ^ value ^ 1) & 0x10) == 0x10) {
+                      this.setFlag(HALF_CARRY_FLAG);
+                  }
                   this.clearFlag(SUBTRACTION_FLAG);
                   this.updateZeroFlag(result);
                   this.bus.writeByte(this.HL, result);
               },
               0x3C: () => {
                 const result = wrappingByteAdd(this.A, 1);
-                this.updateHalfCarryFlag(this.A, 1);
+                //this.updateHalfCarryFlag(this.A, 1);
+                this.clearFlag(HALF_CARRY_FLAG);
+                if (((result[0] ^ this.A ^ 1) & 0x10) == 0x10) {
+                    this.setFlag(HALF_CARRY_FLAG);
+                }
                 this.clearFlag(SUBTRACTION_FLAG);
                 this.updateZeroFlag(result[0]);
                 this.A = result[0];                   
@@ -1938,7 +1976,13 @@ export class CPU {
             const value = this.bus.readByte(this.PC + 1);
             const offset = makeSigned(value, 1);
             const result = wrappingTwoByteAdd(this.SP, offset);
-            this.updateHalfCarryFlag(this.SP, offset);
+
+            //this.updateHalfCarryFlag(this.SP, offset);
+            if (((result[0] ^ this.SP ^ offset) & 0x1000) == 0x1000) {
+                this.setFlag(HALF_CARRY_FLAG);
+            } else {
+                this.clearFlag(HALF_CARRY_FLAG);
+            }    
 
             this.clearFlag(CARRY_FLAG);
             if (result[1]) {
@@ -2098,6 +2142,86 @@ export class CPU {
             this.incrementHL();
             this.PC++;
             return 8;
+        } else if (op === 0xC4) {
+            // CALL NZ, a16
+            const addr = this.readTwoByteValue(this.PC + 1);
+
+            if (!this.getFlag(ZERO_FLAG)) {
+                // push address after this instruction on to the stack
+                this.pushAddressOnStack(this.PC + 3); // 3 because this instruction is 3 bytes long 
+                this.PC = addr;
+                return 24;
+            }
+
+            this.PC += 3;
+            return 12;
+        } else if (op === 0xD4) {
+            // CALL NC, a16
+            const addr = this.readTwoByteValue(this.PC + 1);
+
+            if (!this.getFlag(CARRY_FLAG)) {
+                // push address after this instruction on to the stack
+                this.pushAddressOnStack(this.PC + 3); // 3 because this instruction is 3 bytes long 
+                this.PC = addr;
+                return 24;
+            }
+
+            this.PC += 3;
+            return 12;
+        } else if (op === 0xCC) {
+            // CALL Z, a16
+            const addr = this.readTwoByteValue(this.PC + 1);
+
+            if (this.getFlag(ZERO_FLAG)) {
+                // push address after this instruction on to the stack
+                this.pushAddressOnStack(this.PC + 3); // 3 because this instruction is 3 bytes long 
+                this.PC = addr;
+                return 24;
+            }
+
+            this.PC += 3;
+            return 12;
+        } else if (op === 0xDC) {
+            // CALL C, a16
+            const addr = this.readTwoByteValue(this.PC + 1);
+
+            if (this.getFlag(CARRY_FLAG)) {
+                // push address after this instruction on to the stack
+                this.pushAddressOnStack(this.PC + 3); // 3 because this instruction is 3 bytes long 
+                this.PC = addr;
+                return 24;
+            }
+
+            this.PC += 3;
+            return 12;
+        } else if (op === 0xCF) {
+            // RST 0x08
+            this.rstInstruction(0x08); // fn changes PC address
+            return 16;
+        } else if (op === 0xDF) {
+            // RST 0x18
+            this.rstInstruction(0x18); // fn changes PC address
+            return 16;
+        } else if (op === 0xEF) {
+            // RST 0x28
+            this.rstInstruction(0x28); // fn changes PC address
+            return 16;
+        } else if (op === 0xC7) {
+            // RST 0x00
+            this.rstInstruction(0x00); // fn changes PC address
+            return 16;
+        } else if (op === 0xD7) {
+            // RST 0x10
+            this.rstInstruction(0x10); // fn changes PC address
+            return 16;
+        } else if (op === 0xE7) {
+            // RST 0x20
+            this.rstInstruction(0x20); // fn changes PC address
+            return 16;
+        } else if (op === 0xF7) {
+            // RST 0x30
+            this.rstInstruction(0x30); // fn changes PC address
+            return 16;
         } else if (op === 0xCB) {
             let nextInstrByte = this.bus.readByte(this.PC + 1);
 
@@ -2363,22 +2487,6 @@ export class CPU {
                 this.A = this.shiftRightIntoCarry(this.A);
                 this.PC += 2;
                 return 8;
-
-            // case 0x27:
-            //     // SLA A
-            //     // Shift n left into Carry. LSB of n set to 0
-            //     if ((this.A & 0x80) === 0x80) {
-            //         this.setFlag(HALF_CARRY_FLAG);
-            //     } else {
-            //         this.clearFlag(HALF_CARRY_FLAG);
-            //     }
-            //     this.A = this.A << 1;
-            //     this.clearFlag(SUBTRACTION_FLAG);
-            //     this.clearFlag(CARRY_FLAG)
-            //     this.updateZeroFlag(this.A);
-
-            //     this.PC += 2;
-            //     return 8;
             case 0x30:
                 // SWAP B
                 this.swapNibblesOf(this.B);
@@ -2571,6 +2679,11 @@ export class CPU {
     private sbcInstruction(value) {
       const carryFlag = this.getFlag(CARRY_FLAG) ? 1 : 0;
       return this.subOneByte(this.A, value, carryFlag);
+    }
+
+    private rstInstruction(rstAddr: number) {
+        this.pushAddressOnStack(this.PC + 1);
+        this.PC = rstAddr;
     }
 
     // NO BUGS HERE. LITERALLY A PERFECT IMPLEMENTATION
@@ -3076,7 +3189,7 @@ export class Cartridge {
               this.romBytes,
               this.getROMSize(romHeader.romSize)
           )
-        } else if (romHeader.cartridgeType === 0x01) { // MBC1
+        } else if (romHeader.cartridgeType in [0x01, 0x02, 0x03]) { // MBC1
           this.mbc = new MBC1(
               this.romBytes,
               this.getROMSize(romHeader.romSize)
@@ -3117,6 +3230,104 @@ export class Cartridge {
             maskROMVersionNumber: this.romBytes[0x014C],
             headerChecksum: this.romBytes[0x014D]
         };
+    }
+
+    public displayRomHeader() {
+        const header = this.getRomHeaderInfo();
+        console.log(`
+            RomTitle = ${header.romTitle}
+            SGBSupported = ${header.SGBSupported}
+            LicenseCode = ${this.licenseCodeDisplayName(header.licenseCode)}
+            CartridgeType = ${this.cartridgeTypeDisplayName(header.cartridgeType)}
+            RomSize = ${this.romSizeDisplayName(header.romSize)}
+            RamSize = ${this.ramSizeDisplayName(header.ramSize)}
+        `);
+    }
+
+    private licenseCodeDisplayName(licenseCode: number): string {
+        // 00	none	01	Nintendo R&D1	08	Capcom
+        // 13	Electronic Arts	18	Hudson Soft	19	b-ai
+        // 20	kss	22	pow	24	PCM Complete
+        // 25	san-x	28	Kemco Japan	29	seta
+        // 30	Viacom	31	Nintendo	32	Bandai
+        // 33	Ocean/Acclaim	34	Konami	35	Hector
+        // 37	Taito	38	Hudson	39	Banpresto
+        // 41	Ubi Soft	42	Atlus	44	Malibu
+        // 46	angel	47	Bullet-Proof	49	irem
+        // 50	Absolute	51	Acclaim	52	Activision
+        // 53	American sammy	54	Konami	55	Hi tech entertainment
+        // 56	LJN	57	Matchbox	58	Mattel
+        // 59	Milton Bradley	60	Titus	61	Virgin
+        // 64	LucasArts	67	Ocean	69	Electronic Arts
+        // 70	Infogrames	71	Interplay	72	Broderbund
+        // 73	sculptured	75	sci	78	THQ
+        // 79	Accolade	80	misawa	83	lozc
+        // 86	tokuma shoten i*	87	tsukuda ori*	91	Chunsoft
+        // 92	Video system	93	Ocean/Acclaim	95	Varie
+        // 96	Yonezawa/s'pal	97	Kaneko	99	Pack in soft
+        // A4	Konami (Yu-Gi-Oh!)
+        return {
+            0x00: "None", 0x01: "Nintendo R&D1", 0x08: "Capcom", 0x13: "Electronic Arts",
+            0x18: "Hudson Soft", 0x19: "b-ai", 0x20: "kss 22  pow", 0x24: "PCM Complete"
+        }[licenseCode] || "<unknown>";
+    }
+
+    private romSizeDisplayName(romSize: number): string {
+        // 00h -  32KByte (no ROM banking)
+        // 01h -  64KByte (4 banks)
+        // 02h - 128KByte (8 banks)
+        // 03h - 256KByte (16 banks)
+        // 04h - 512KByte (32 banks)
+        // 05h -   1MByte (64 banks)  - only 63 banks used by MBC1
+        // 06h -   2MByte (128 banks) - only 125 banks used by MBC1
+        // 07h -   4MByte (256 banks)
+        // 08h -   8MByte (512 banks)
+        // 52h - 1.1MByte (72 banks)
+        // 53h - 1.2MByte (80 banks)
+        // 54h - 1.5MByte (96 banks)
+        return {
+            0x00: "32KB (no banks)", 0x01: "64KB (4 banks)", 0x02: "128KB (8 banks)",
+            0x03: "256KB (16 banks)", 0x04: "512KB (32 banks)", 0x05: "1MB (64 banks)",
+            0x06: "2MB (128 banks)", 0x07: "4MB (256 banks)", 0x08: "8MB (512 banks)",
+            0x52: "1.1MB (72 banks)", 0x53: "1.2MB (80 banks)", 0x54: "1.5MB (96 banks)"
+        }[romSize] || "<unknown";
+    }
+
+    private ramSizeDisplayName(ramSize: number): string {
+        // 00h - None
+        // 01h - 2 KBytes
+        // 02h - 8 Kbytes
+        // 03h - 32 KBytes (4 banks of 8KBytes each)
+        // 04h - 128 KBytes (16 banks of 8KBytes each)
+        // 05h - 64 KBytes (8 banks of 8KBytes each)
+        return {
+            0x00: "None", 0x01: "2KB", 0x02: "8KB", 0x03: "32KB (4 banks of 8KB each)",
+            0x04: "128KB (16 banks of 8KB each)", 0x05: "64KB (8 banks of 8KB each"
+        }[ramSize] || "<unknown>";
+    }
+
+    // https://gbdev.gg8.se/wiki/articles/Gameboy_ROM_Header_Info#Cartridge_type
+    private cartridgeTypeDisplayName(cartridgeType: number): string {
+        const displayNames = {
+            0x00: "MBC0",
+            0x01: "MBC1",
+            0x02: "MBC1 + RAM",
+            0x03: "MBC1 + RAM + BATTERY",
+            0x05: "MBC2",
+            0x06: "MBC2 + BATTERY",
+            0x08: "ROM + RAM",
+            0x09: "ROM + RAM + BATTERY",
+            0x0B: "MMM01",
+            0x0C: "MMM01 + RAM",
+            0x0D: "MMM01 + RAM + BATTERY",
+            0x0F: "MBC3 + TIMER + BATTERY",
+            0x10: "MBC3 + TIMER + RAM + BATTERY",
+            0x11: "MBC3",
+            0x12: "MBC3 + RAM",
+            0x13: "MBC3 + RAM + BATTERY"
+        };
+
+        return displayNames[cartridgeType] || "<unknown>";
     }
 
     private getLiscenseCode(): number {
