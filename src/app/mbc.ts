@@ -66,13 +66,12 @@ export class MBC1 extends MemoryBankController {
    WriteByte(addr: number, value: number) {
      if (addr >= 0x2000 && addr <= 0x3FFF) {
         // Quirk of MBC1. Ref: https://b13rg.github.io/Gameboy-Bank-Switching/
-        if (value === 0x00) {
+        // TODO: Verify below commented-out quirk fix
+        /*if (value === 0x00) {
           this.switchROMBank(1);
-        } else if (value in [0x20, 0x40, 0x60]) {
-           this.switchROMBank(value + 1);
-        } else {
+        } else {*/
           this.switchROMBank(value % 0x1F);
-        }
+        //}
      } else if (addr >= 0x4000 && addr <= 0x5FFF) {
         this.switchRAMBank(value % 0x03);
      } else if (addr >= 0x0000 && addr <= 0x1FFF) {

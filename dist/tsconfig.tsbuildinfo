@@ -182,7 +182,7 @@
         "affectsGlobalScope": false
       },
       "../src/app/mbc.ts": {
-        "version": "34ba12ee9dca6e0e2b82d73996bc478d9ee3b4be4cfd4ad1fe67613cceca27ec",
+        "version": "12d4ac803bb848085e4a180e9675c3f7aa7462b91056cfba43692c49cc72167f",
         "signature": "056379546692db594b66d0442f1949384fce0c9fa53c6b52e977be7e7c36ebdb",
         "affectsGlobalScope": false
       },
