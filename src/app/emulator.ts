@@ -6,6 +6,7 @@ import { DebugConsole } from './debugger_console';
 import { disassemble } from './disassembler';
 
 const ADDRESS_TRACING_MODE = true;
+const LOG_SERIAL_IO_BYTES = true;
 
 /*
 TODO:
@@ -197,7 +198,9 @@ export class MemoryBus {
         } else if (addr >= 0xff40 && addr <= 0xff4a) { //PPU Special Registers
             this.ppu.writeSpecialRegister(addr, value);
         } else if (addr === 0xFF01) {
-            //console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
+            if (LOG_SERIAL_IO_BYTES) {
+                console.log(`OUT: ${String.fromCharCode(value)} (${displayAsHex(value)}), PC = ${displayAsHex(this.cpu.PC)}`);
+            }
         } else if (addr >= 0xff00 && addr <= 0xff30) { // I/O Special Registers
             // console.warn("I/O Registers aren't supported yet");
         } else if (addr >= 0x0000 && addr <= 0x7FFF) {
@@ -2626,32 +2629,32 @@ export class CPU {
                 return 8;
             case 0x38:
                 // SRL B
-                this.B = this.shiftRightIntoCarry(this.B);
+                this.B = this.shiftRight(this.B);
                 this.PC += 2;
                 return 8;
             case 0x39:
                 // SRL C
-                this.C = this.shiftRightIntoCarry(this.C);
+                this.C = this.shiftRight(this.C);
                 this.PC += 2;
                 return 8;
             case 0x3A:
                 // SRL D
-                this.D = this.shiftRightIntoCarry(this.D);
+                this.D = this.shiftRight(this.D);
                 this.PC += 2;
                 return 8;
             case 0x3B:
                 // SRL E
-                this.E = this.shiftRightIntoCarry(this.E);
+                this.E = this.shiftRight(this.E);
                 this.PC += 2;
                 return 8;
             case 0x3C:
                 // SRL H
-                this.updateH( this.shiftRightIntoCarry(this.H()) );
+                this.updateH( this.shiftRight(this.H()) );
                 this.PC += 2;
                 return 8;
             case 0x3D:
                 // SRL L
-                this.updateL( this.shiftRightIntoCarry(this.L()) );
+                this.updateL( this.shiftRight(this.L()) );
                 this.PC += 2;
                 return 8;
             case 0x3E:
@@ -2793,7 +2796,7 @@ export class CPU {
         if ((value & 0x01) === 0x01) {
             this.setFlag(CARRY_FLAG);
         }
-        const updated = (value >>> 1); //| (value & 0x80);
+        const updated = (value >>> 1) | (value & 0x80);
 
         this.Flags.zeroFlag = updated === 0x00;
         this.clearFlag(SUBTRACTION_FLAG);
