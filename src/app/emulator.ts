@@ -863,16 +863,16 @@ export class CPU {
             this.A = this.E;
             this.PC++;
             return 4;
-        } else if (op === 0xBF) {
-            // compare A with A. Set flags as if they are equal
-            // CP A
-            this.setFlag(ZERO_FLAG);
-            this.setFlag(SUBTRACTION_FLAG);
-            this.clearFlag(HALF_CARRY_FLAG);
-            this.clearFlag(CARRY_FLAG);
+        // } else if (op === 0xBF) {
+        //     // compare A with A. Set flags as if they are equal
+        //     // CP A
+        //     this.setFlag(ZERO_FLAG);
+        //     this.setFlag(SUBTRACTION_FLAG);
+        //     this.clearFlag(HALF_CARRY_FLAG);
+        //     this.clearFlag(CARRY_FLAG);
 
-            this.PC++;
-            return 4;
+        //     this.PC++;
+        //     return 4;
         } else if (op === 0x29) {
             // ADD HL, HL
             this.addToHLInstr(this.HL);
@@ -1393,20 +1393,6 @@ export class CPU {
             this.pushAddressOnStack(this.PC + 1);
             this.PC = 0x28;
             return 16;
-        } else if (op === 0x87) {
-            // ADD A, A;
-            const result = wrappingByteAdd(this.A, this.A);
-//            this.updateHalfCarryFlag(this.A, this.A);
-            this.clearFlag(HALF_CARRY_FLAG);
-            if (((result[0] ^ this.A ^ this.A) & 0x10) == 0x10) {
-                this.setFlag(HALF_CARRY_FLAG);
-            }
-            this.A = result[0];
-            this.clearFlag(SUBTRACTION_FLAG);
-            result[1] ? this.setFlag(CARRY_FLAG) : this.clearFlag(CARRY_FLAG);
-
-            this.PC++;
-            return 4;
         } else if (op === 0x5F) {
             // LD E, A
             this.E = this.A;
@@ -1554,89 +1540,94 @@ export class CPU {
             this.PC++;
             return 4;
         } else if (op === 0x0A) {
-            // 'LD A, (BC)';
+            // LD A, (BC)';
             this.A = this.bus.readByte(this.BC());
             this.PC++;
             return 8;
         } else if (op === 0x80) {
-            // 'ADD A, B';
+            // ADD A, B';
             this.A = this.addOneByte(this.A, this.B);
             this.PC++;
             return 4;
         } else if (op === 0x81) {
-            // 'ADD A, C';
+            // ADD A, C';
             this.A = this.addOneByte(this.A, this.C);
             this.PC++;
             return 4;
         } else if (op === 0x82) {
-            // 'ADD A, D';
+            // ADD A, D';
             this.A = this.addOneByte(this.A, this.D);
             this.PC++;
             return 4;
         } else if (op === 0x83) {
-            // 'ADD A, E';
+            // ADD A, E';
             this.A = this.addOneByte(this.A, this.E);
             this.PC++;
             return 4;
         } else if (op === 0x84) {
-            // 'ADD A, H';
+            // ADD A, H';
             this.A = this.addOneByte(this.A, this.H());
             this.PC++;
             return 4;
         } else if (op === 0x85) {
-            // 'ADD A, L';
+            // ADD A, L';
             this.A = this.addOneByte(this.A, this.L());
             this.PC++;
             return 4;
         } else if (op === 0x86) {
-            // 'ADD A, (HL)';
+            // ADD A, (HL)';
             this.A = this.addOneByte(this.A, this.bus.readByte(this.HL));
             this.PC++;
             return 8;
+        } else if (op === 0x87) {
+            // ADD A, A;
+            this.A = this.addOneByte(this.A, this.A);
+            this.PC++;
+            return 4;
         } else if (op === 0x88) {
-            // 'ADC A, B';
+            // ADC A, B';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.B, carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x89) {
-            // 'ADC A, C';
+            // ADC A, C';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.C, carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x8A) {
-            // 'ADC A, D';
+            // ADC A, D';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.D, carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x8B) {
-            // 'ADC A, E';
+            // ADC A, E';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.E, carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x8C) {
-            // 'ADC A, H';
+            // ADC A, H';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.H(), carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x8D) {
-            // 'ADC A, L';
+            // ADC A, L';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.L(), carryValue);
             this.PC++;
             return 4;
         } else if (op === 0x8E) {
-            // 'ADC A, (HL)';
+            // ADC A, (HL)';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.bus.readByte(this.HL), carryValue);
             this.PC++;
             return 8;
         } else if (op === 0x8F) {
-            // 'ADC A, A';
+            // ADC A, A';
             const carryValue = this.getFlag(CARRY_FLAG) ? 1 : 0;
             this.addOneByte(this.A, this.A, carryValue);
             this.PC++;
@@ -2045,11 +2036,13 @@ export class CPU {
             this.clearFlag(HALF_CARRY_FLAG);
             this.PC++;
             return 4;
-        } else if (op === 0x98) { 
+        } else if (op === 0x98) {
+            // SBC B
             this.A = this.sbcInstruction(this.B);
             this.PC++;
             return 4;
         }  else if (op === 0x99) {
+            // SBC C
             this.A = this.sbcInstruction(this.C);
             this.PC++;
             return 4; 
@@ -2075,6 +2068,7 @@ export class CPU {
             this.PC++;
             return 8;
         }  else if (op === 0x9F) {
+            // SBC A
             this.sbcInstruction(this.A);
             this.PC++;
             return 4;
@@ -2862,6 +2856,7 @@ export class CPU {
         return 4; // consumes 4 cycles
     }
 
+    // TODO: Only used by 0xF6 opcode
     private executeOr(operand: number) {
         this.A = this.A | operand;
         this.updateZeroFlag(this.A);
@@ -2874,9 +2869,10 @@ export class CPU {
     // @return number => the resulting value after its nibbles are swapped
     private swapNibblesOf(value: number): number {
         // swap upper and lower nibbles of A
-        const upper = (value & 0xF0) >> 4;
-        const lower = value & 0x0F;
-        value = (lower << 4) | upper;
+        // const upper = (value & 0xF0) >> 4;
+        // const lower = value & 0x0F;
+        // value = (lower << 4) | upper;
+        value = ((value & 0xF0) >> 4) ^ ((value & 0x0F) << 4);
         this.updateZeroFlag(value);
         this.clearFlag(SUBTRACTION_FLAG);
         this.clearFlag(HALF_CARRY_FLAG);
@@ -2922,7 +2918,8 @@ export class CPU {
     }
 
     private updateSubHalfCarryFlag(a: number, b: number) {
-        if ((((a & 0xF) - (b & 0xF)) & 0x10) === 0x10) {
+        //if ((((a & 0xF) - (b & 0xF)) & 0x10) === 0x10) {
+        if ((a & 0xF) < (b & 0xF)) {
             this.setFlag(HALF_CARRY_FLAG);
         } else {
             this.clearFlag(HALF_CARRY_FLAG);

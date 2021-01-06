@@ -177,7 +177,7 @@
         "affectsGlobalScope": false
       },
       "../src/app/ppu.ts": {
-        "version": "76c53a52fd025494dfbe783f5a167992103be5df1d221a1d29b18ed0c146db9a",
+        "version": "36caa00279e0151abcfba6d790be49276e45602393310a442d9b0fe765cfff5f",
         "signature": "c32f412f7e58308a45f31f3123c844fc2e58bd22729c97ac99f65031810260c1",
         "affectsGlobalScope": false
       },
@@ -192,8 +192,8 @@
         "affectsGlobalScope": false
       },
       "../src/app/emulator.ts": {
-        "version": "f587b9146c78ba0ac34dfff79aabff6f39ceb648b48947ac72ab8351ed91f7b3",
-        "signature": "8fb3daf3b24032157ffee2aa0ec84bd3447c63786d373fd6ab6c67209a7c7696",
+        "version": "71286424bb5ea9d8925c7f6ce1c6bcc2543bb031887617e9aafda5fe4f417d6b",
+        "signature": "baee7f6def40c8e7d3317e637c92c784f187f1e591e753e54dec264c201e0874",
         "affectsGlobalScope": false
       },
       "../src/app/debugger_console.ts": {

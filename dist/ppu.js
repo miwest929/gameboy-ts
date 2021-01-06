@@ -484,13 +484,13 @@ class PPU {
         //console.log(`LY = ${this.LY}, tileId = ${tileId}, lineOffset = ${lineOffset}`);
         // 8 bits
         let pixel0 = ((msbPixels & 0x80) >> 6) | ((lsbPixels & 0x80) >> 7);
-        let pixel1 = ((msbPixels & 0x40) >> 6) | ((lsbPixels & 0x40) >> 7);
-        let pixel2 = ((msbPixels & 0x20) >> 6) | ((lsbPixels & 0x20) >> 7);
-        let pixel3 = ((msbPixels & 0x10) >> 6) | ((lsbPixels & 0x10) >> 7);
-        let pixel4 = ((msbPixels & 0x08) >> 6) | ((lsbPixels & 0x08) >> 7);
-        let pixel5 = ((msbPixels & 0x04) >> 6) | ((lsbPixels & 0x04) >> 7);
-        let pixel6 = ((msbPixels & 0x02) >> 6) | ((lsbPixels & 0x02) >> 7);
-        let pixel7 = ((msbPixels & 0x01) >> 6) | ((lsbPixels & 0x01) >> 7);
+        let pixel1 = ((msbPixels & 0x40) >> 5) | ((lsbPixels & 0x40) >> 6);
+        let pixel2 = ((msbPixels & 0x20) >> 4) | ((lsbPixels & 0x20) >> 5);
+        let pixel3 = ((msbPixels & 0x10) >> 3) | ((lsbPixels & 0x10) >> 4);
+        let pixel4 = ((msbPixels & 0x08) >> 2) | ((lsbPixels & 0x08) >> 3);
+        let pixel5 = ((msbPixels & 0x04) >> 1) | ((lsbPixels & 0x04) >> 2);
+        let pixel6 = (msbPixels & 0x02) | ((lsbPixels & 0x02) >> 1);
+        let pixel7 = ((msbPixels & 0x01) << 1) | (lsbPixels & 0x01);
         // map the pixels value to their actual colors according to BGP register
         return [pixel0, pixel1, pixel2, pixel3, pixel4, pixel5, pixel6, pixel7];
     }
