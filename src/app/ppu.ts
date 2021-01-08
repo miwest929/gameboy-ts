@@ -410,7 +410,6 @@ export class PPU {
         if (addr === Address.LCDC_ADDR) {
             return this.LCDC_REGISTER.RawValue;
         } else if (addr === Address.LY_ADDR) {
-            //console.log("READ the LY special register");
             return this.LY;
         } else if (addr === Address.SCROLLY_ADDR) {
             return this.SCROLL_Y;
@@ -573,6 +572,9 @@ export class PPU {
       return [pixel0, pixel1, pixel2, pixel3, pixel4, pixel5, pixel6, pixel7];
     }
 
+    /*
+        This is necessary because bit-wise negation does not work as expected in Javascript
+    */
     private bitNegation(value: number): number {
         let binaryString: string = value.toString(2);
         let negatedBinary: string = "";
@@ -620,12 +622,10 @@ export class PPU {
 
           // "render" pixels in tileScanlineData
           // by "render" we write to this.pixels array
-          //console.log(scanlinePixels);
           for (let i = 0; i < 8; i++) {
             this.pixels[this.LY][tOffset * 8 + i] = scanlinePixels[i];
           }
       }      
-      // pixels[x][y] = color
       // entire scanline has been "rendered"
     }
 
@@ -644,9 +644,6 @@ export class PPU {
         // The base address 
         const tileMapAddr = bgTileMapAddr + Math.floor(this.LY / 8) * 32; // bgTileMapAddr + adjustedScreenY;
         const lineOffset = this.LY % 8; // TODO: Verify this computation
-        // console.log(`LY = ${this.LY}, BaseTileMapAddress = ${displayAsHex(bgTileMapAddr)}, TileMapAddress = ${displayAsHex(tileMapAddr)}, lineOffset = ${lineOffset}`);
-        //const initialTileX = this.SCROLL_X % 8;
-        //const initialTileY = adjustedScreenY % 8;
         this.renderScanline(tileMapAddr, lineOffset);
     }
 
