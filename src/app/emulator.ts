@@ -5,7 +5,7 @@ import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
 import { disassemble } from './disassembler';
 
-const ADDRESS_TRACING_MODE = true;
+const ADDRESS_TRACING_MODE = false;
 const LOG_SERIAL_IO_BYTES = true;
 
 /*
