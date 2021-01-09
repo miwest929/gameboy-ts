@@ -7,7 +7,6 @@ const ppu_1 = require("./ppu");
 const mbc_1 = require("./mbc");
 const debugger_console_1 = require("./debugger_console");
 const disassembler_1 = require("./disassembler");
-const ADDRESS_TRACING_MODE = true;
 const LOG_SERIAL_IO_BYTES = true;
 /*
 TODO:
@@ -653,13 +652,13 @@ class CPU {
             return 12;
         }
         else if (op === 0x0E) {
-            // LD C,d8
+            // LD C, d8
             this.C = this.bus.readByte(this.PC + 1);
             this.PC += 2;
             return 8;
         }
         else if (op === 0x06) {
-            // LD B,d8
+            // LD B, d8
             this.B = this.bus.readByte(this.PC + 1);
             this.PC += 2;
             return 8;
@@ -668,8 +667,7 @@ class CPU {
             // Put A into memory address HL. Decrement HL.
             // LD (HL-),A
             this.bus.writeByte(this.HL, this.A);
-            const result = wrappingTwoByteSub(this.HL, 1);
-            this.HL = result[0];
+            this.decrementHL();
             this.PC++;
             return 8;
         }
@@ -799,6 +797,13 @@ class CPU {
         else if (op === 0x39) {
             // ADD HL, SP
             this.addToHLInstr(this.SP);
+            this.PC++;
+            return 8;
+        }
+        else if (op === 0x3A) {
+            // LD A, (HL-)
+            this.A = this.bus.readByte(this.HL);
+            this.decrementHL();
             this.PC++;
             return 8;
         }
@@ -991,8 +996,6 @@ class CPU {
             this.PC++;
             return 8;
         }
-        else if (op === 0x02) {
-        }
         else if (op === 0xD9) {
             // RETI
             // pop two bytes from the stack and jump to that address
@@ -1097,6 +1100,11 @@ class CPU {
             this.PC++;
             return this.executeAnd(this.L());
         }
+        else if (op === 0xA6) {
+            // AND (HL)
+            this.PC++;
+            return this.executeAnd(this.bus.readByte(this.HL));
+        }
         else if (op === 0x28) {
             // JR Z, r8
             const value = this.bus.readByte(this.PC + 1);
@@ -1155,7 +1163,7 @@ class CPU {
             }
         }
         else if (op === 0xD8) {
-            // 'RET C'
+            // RET C
             if (this.getFlag(exports.CARRY_FLAG)) {
                 const lsb = this.stackPop();
                 const msb = this.stackPop();
@@ -1167,6 +1175,13 @@ class CPU {
                 this.PC++;
                 return 8;
             }
+        }
+        else if (op === 0xDE) {
+            // SBC A, d8
+            const value = this.bus.readByte(this.PC + 1);
+            this.A = this.sbcInstruction(value);
+            this.PC += 2;
+            return 8;
         }
         else if (op === 0xFA) {
             // 'LD A, (a16)';
@@ -2604,99 +2619,6 @@ class CPU {
                     this.swapNibblesOf(this.A);
                     this.PC += 2;
                     return 8;
-                case 0x87:
-                    // 'RES 0, A'
-                    // Reset bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
-                    this.A = this.clearBit(this.A, 0);
-                    this.PC += 2;
-                    return 8;
-                case 0x86:
-                    // 'RES 0, (HL)'
-                    const hlValue = this.clearBit(this.bus.readByte(this.HL), 0);
-                    this.bus.writeByte(this.HL, hlValue);
-                    this.PC += 2;
-                    return 16;
-                case 0x78:
-                    // BIT 7, B
-                    this.updateZeroFlagWithBit(this.B, 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x79:
-                    // BIT 7, C
-                    this.updateZeroFlagWithBit(this.C, 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x7A:
-                    // BIT 7, D
-                    this.updateZeroFlagWithBit(this.D, 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x7B:
-                    // BIT 7, E
-                    this.updateZeroFlagWithBit(this.E, 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x7C:
-                    // BIT 7, H
-                    this.updateZeroFlagWithBit(this.H(), 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x7D:
-                    // BIT 7, L
-                    this.updateZeroFlagWithBit(this.L(), 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x7E:
-                    // BIT 7, (HL)
-                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 7);
-                    this.PC += 2;
-                    return 16;
-                case 0x7F:
-                    // Updates Z, is zero flag
-                    // BIT 7, A
-                    this.updateZeroFlagWithBit(this.A, 7);
-                    this.PC += 2;
-                    return 8;
-                case 0x50:
-                    // 'BIT 2, B';
-                    this.updateZeroFlagWithBit(this.B, 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x51:
-                    // 'BIT 2, C';
-                    this.updateZeroFlagWithBit(this.C, 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x52:
-                    // 'BIT 2, D';
-                    this.updateZeroFlagWithBit(this.D, 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x53:
-                    // 'BIT 2, E';
-                    this.updateZeroFlagWithBit(this.E, 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x54:
-                    // 'BIT 2, H';
-                    this.updateZeroFlagWithBit(this.H(), 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x55:
-                    // 'BIT 2, L';
-                    this.updateZeroFlagWithBit(this.L(), 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x56:
-                    // 'BIT 2, (HL)';
-                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 2);
-                    this.PC += 2;
-                    return 8;
-                case 0x57:
-                    // 'BIT 2, A';
-                    this.updateZeroFlagWithBit(this.A, 2);
-                    this.PC += 2;
-                    return 8;
                 case 0x38:
                     // SRL B
                     this.B = this.shiftRight(this.B);
@@ -2738,6 +2660,266 @@ class CPU {
                     // SRL E
                     this.A = this.shiftRightIntoCarry(this.A);
                     this.PC += 2;
+                    return 8;
+                case 0x40:
+                    // BIT 0, B
+                    return this.updateZeroFlagWithBit(this.B, 0);
+                case 0x41:
+                    // BIT 0, C
+                    return this.updateZeroFlagWithBit(this.C, 0);
+                case 0x42:
+                    // BIT 0, D
+                    return this.updateZeroFlagWithBit(this.D, 0);
+                case 0x43:
+                    // BIT 0, E
+                    return this.updateZeroFlagWithBit(this.E, 0);
+                case 0x44:
+                    // BIT 0, H
+                    return this.updateZeroFlagWithBit(this.H(), 0);
+                case 0x45:
+                    // BIT 0, L
+                    return this.updateZeroFlagWithBit(this.L(), 0);
+                case 0x46:
+                    // BIT 0, (HL)
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 0);
+                    return 16;
+                case 0x47:
+                    // BIT 0, A
+                    return this.updateZeroFlagWithBit(this.A, 0);
+                case 0x48:
+                    // BIT 1, B
+                    return this.updateZeroFlagWithBit(this.B, 1);
+                case 0x49:
+                    // BIT 1, C
+                    return this.updateZeroFlagWithBit(this.C, 1);
+                case 0x4A:
+                    // BIT 1, D
+                    return this.updateZeroFlagWithBit(this.D, 1);
+                case 0x4B:
+                    // BIT 1, E
+                    return this.updateZeroFlagWithBit(this.E, 1);
+                case 0x4C:
+                    // BIT 1, H
+                    return this.updateZeroFlagWithBit(this.H(), 1);
+                case 0x4D:
+                    // BIT 1, L
+                    return this.updateZeroFlagWithBit(this.L(), 1);
+                case 0x4E:
+                    // BIT 1, (HL)
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 1);
+                    return 16;
+                case 0x4F:
+                    // BIT 1, A
+                    return this.updateZeroFlagWithBit(this.A, 1);
+                case 0x50:
+                    // BIT 2, B
+                    return this.updateZeroFlagWithBit(this.B, 2);
+                case 0x51:
+                    // 'BIT 2, C';
+                    return this.updateZeroFlagWithBit(this.C, 2);
+                case 0x52:
+                    // 'BIT 2, D';
+                    return this.updateZeroFlagWithBit(this.D, 2);
+                case 0x53:
+                    // 'BIT 2, E';
+                    return this.updateZeroFlagWithBit(this.E, 2);
+                case 0x54:
+                    // 'BIT 2, H';
+                    return this.updateZeroFlagWithBit(this.H(), 2);
+                case 0x55:
+                    // 'BIT 2, L';
+                    return this.updateZeroFlagWithBit(this.L(), 2);
+                case 0x56:
+                    // 'BIT 2, (HL)';
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 2);
+                    return 16;
+                case 0x57:
+                    // 'BIT 2, A';
+                    return this.updateZeroFlagWithBit(this.A, 2);
+                case 0x58:
+                    // BIT 3, B
+                    return this.updateZeroFlagWithBit(this.B, 3);
+                case 0x59:
+                    // BIT 3, C
+                    return this.updateZeroFlagWithBit(this.C, 3);
+                case 0x5A:
+                    // BIT 3, D
+                    return this.updateZeroFlagWithBit(this.D, 3);
+                case 0x5B:
+                    // BIT 3, E
+                    return this.updateZeroFlagWithBit(this.E, 3);
+                case 0x5C:
+                    // BIT 3, H
+                    return this.updateZeroFlagWithBit(this.H(), 3);
+                case 0x5D:
+                    // BIT 3, L
+                    return this.updateZeroFlagWithBit(this.L(), 3);
+                case 0x5E:
+                    // BIT 3, (HL)
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 3);
+                    return 16;
+                case 0x5F:
+                    // BIT 3, A
+                    return this.updateZeroFlagWithBit(this.A, 3);
+                case 0x70:
+                    // BIT 6, B
+                    return this.updateZeroFlagWithBit(this.B, 6);
+                case 0x71:
+                    // BIT 6, C
+                    return this.updateZeroFlagWithBit(this.C, 6);
+                case 0x72:
+                    // BIT 6, D
+                    return this.updateZeroFlagWithBit(this.D, 6);
+                case 0x73:
+                    // BIT 6, E
+                    return this.updateZeroFlagWithBit(this.E, 6);
+                case 0x74:
+                    // BIT 6, H
+                    return this.updateZeroFlagWithBit(this.H(), 6);
+                case 0x75:
+                    // BIT 6, L
+                    return this.updateZeroFlagWithBit(this.L(), 6);
+                case 0x76:
+                    // BIT 6, (HL)
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 6);
+                    return 16;
+                case 0x77:
+                    // BIT 6, A
+                    return this.updateZeroFlagWithBit(this.A, 6);
+                case 0x78:
+                    // BIT 7, B
+                    return this.updateZeroFlagWithBit(this.B, 7);
+                case 0x79:
+                    // BIT 7, C
+                    return this.updateZeroFlagWithBit(this.C, 7);
+                case 0x7A:
+                    // BIT 7, D
+                    return this.updateZeroFlagWithBit(this.D, 7);
+                case 0x7B:
+                    // BIT 7, E
+                    return this.updateZeroFlagWithBit(this.E, 7);
+                case 0x7C:
+                    // BIT 7, H
+                    return this.updateZeroFlagWithBit(this.H(), 7);
+                case 0x7D:
+                    // BIT 7, L
+                    return this.updateZeroFlagWithBit(this.L(), 7);
+                case 0x7E:
+                    // BIT 7, (HL)
+                    this.updateZeroFlagWithBit(this.bus.readByte(this.HL), 7);
+                    return 16;
+                case 0x7F:
+                    // Updates Z, is zero flag
+                    // BIT 7, A
+                    return this.updateZeroFlagWithBit(this.A, 7);
+                case 0x87:
+                    // 'RES 0, A'
+                    // Reset bit u3 in register r8 to 0. Bit 0 is the rightmost one, bit 7 the leftmost one.
+                    this.A = this.resetBitInstruction(this.A, 0);
+                    return 8;
+                case 0x86:
+                    // RES 0, (HL)
+                    return this.resetHLBitInstruction(0);
+                case 0xA0:
+                    // RES 4, B
+                    this.B = this.resetBitInstruction(this.B, 4);
+                    return 8;
+                case 0xA1:
+                    // RES 4, C
+                    this.C = this.resetBitInstruction(this.C, 4);
+                    return 8;
+                case 0xA2:
+                    // RES 4, D
+                    this.D = this.resetBitInstruction(this.D, 4);
+                    return 8;
+                case 0xA3:
+                    // RES 4, E
+                    this.E = this.resetBitInstruction(this.E, 4);
+                    return 8;
+                case 0xA7:
+                    // RES 4, A
+                    this.A = this.resetBitInstruction(this.A, 4);
+                    return 8;
+                case 0xA8:
+                    // RES 5, B
+                    this.B = this.resetBitInstruction(this.B, 5);
+                    return 8;
+                case 0xA9:
+                    // RES 5, C
+                    this.C = this.resetBitInstruction(this.C, 5);
+                    return 8;
+                case 0xAA:
+                    // RES 5, D
+                    this.D = this.resetBitInstruction(this.D, 5);
+                    return 8;
+                case 0xAB:
+                    // RES 5, E
+                    this.E = this.resetBitInstruction(this.E, 5);
+                    return 8;
+                case 0xAE:
+                    // RES 5, (HL)
+                    return this.resetHLBitInstruction(5);
+                case 0xAF:
+                    // RES 5, A
+                    this.A = this.resetBitInstruction(this.A, 5);
+                    return 8;
+                case 0xE0:
+                    // SET 4, B
+                    this.B = this.setBitInstruction(this.B, 4);
+                    return 8;
+                case 0xE1:
+                    // SET 4, C
+                    this.C = this.setBitInstruction(this.C, 4);
+                    return 8;
+                case 0xE2:
+                    // SET 4, D
+                    this.D = this.setBitInstruction(this.D, 4);
+                    return 8;
+                case 0xE3:
+                    // SET 4, E
+                    this.E = this.setBitInstruction(this.E, 4);
+                    return 8;
+                case 0xE4:
+                    // SET 4, H
+                    return this.setHBitInstruction(4);
+                case 0xE5:
+                    // SET 4, L
+                    return this.setLBitInstruction(4);
+                case 0xE6:
+                    // SET 4, (HL)
+                    return this.setHLBitInstruction(4);
+                case 0xE7:
+                    // SET 4, A
+                    this.A = this.setBitInstruction(this.A, 4);
+                    return 8;
+                case 0xE8:
+                    // SET 5, B
+                    this.B = this.setBitInstruction(this.B, 5);
+                    return 8;
+                case 0xE9:
+                    // SET 5, C
+                    this.C = this.setBitInstruction(this.C, 5);
+                    return 8;
+                case 0xEA:
+                    // SET 5, D
+                    this.D = this.setBitInstruction(this.D, 5);
+                    return 8;
+                case 0xEB:
+                    // SET 5, E
+                    this.E = this.setBitInstruction(this.E, 5);
+                    return 8;
+                case 0xEC:
+                    // SET 5, H
+                    return this.setHBitInstruction(5);
+                case 0xED:
+                    // SET 5, L
+                    return this.setLBitInstruction(5);
+                case 0xEE:
+                    // SET 5, (HL)
+                    return this.setHLBitInstruction(5);
+                case 0xEF:
+                    // SET 5, A
+                    this.A = this.setBitInstruction(this.A, 5);
                     return 8;
                 default:
                     console.log(`Error: encountered an unsupported opcode of ${utils_1.displayAsHex(op)} ${utils_1.displayAsHex(nextInstrByte)} at address ${utils_1.displayAsHex(this.PC)}`);
@@ -2879,14 +3061,53 @@ class CPU {
         val === 1 ? this.setFlag(exports.ZERO_FLAG) : this.clearFlag(exports.ZERO_FLAG);
         this.clearFlag(exports.SUBTRACTION_FLAG);
         this.setFlag(exports.HALF_CARRY_FLAG);
+        this.PC += 2;
+        return 8;
+    }
+    getBitInstruction(value, bit) {
+        const updated = this.getBit(value, bit);
+        this.PC += 2;
     }
     getBit(value, bit) {
-        const mask = 0x1 << bit;
-        return (mask & value) >> bit;
+        return ((0x1 << bit) & value) >> bit;
+    }
+    // has side-effect of modifying this.PC
+    setBitInstruction(value, bit) {
+        const updated = this.setBit(value, bit);
+        this.PC += 2;
+        return updated;
+    }
+    setHBitInstruction(bit) {
+        this.updateH(this.setBit(this.H(), bit));
+        this.PC += 2;
+        return 8;
+    }
+    setLBitInstruction(bit) {
+        this.updateL(this.setBit(this.L(), bit));
+        this.PC += 2;
+        return 8;
+    }
+    setHLBitInstruction(bit) {
+        const value = this.bus.readByte(this.HL);
+        const updated = this.setBit(value, bit);
+        this.bus.writeByte(this.HL, updated);
+        this.PC += 2;
+        return 16;
     }
     setBit(value, bit) {
-        const mask = 0x1 << bit;
-        return value | mask;
+        return value | (0x1 << bit);
+    }
+    resetBitInstruction(value, bit) {
+        const updated = this.clearBit(value, 0);
+        this.PC += 2;
+        return updated;
+    }
+    resetHLBitInstruction(bit) {
+        const value = this.bus.readByte(this.HL);
+        const updated = this.clearBit(value, bit);
+        this.bus.writeByte(this.HL, updated);
+        this.PC += 2;
+        return 16;
     }
     clearBit(value, bit) {
         const mask = 0x1 << bit;
@@ -3043,9 +3264,6 @@ class Gameboy {
     // @return boolean => should we continue executing
     async executeNextTick() {
         const prevProgramCounter = this.cpu.PC;
-        if (ADDRESS_TRACING_MODE) {
-            this.debugger.recordAddress(this.cpu);
-        }
         if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
             // suspend execution until a key is pressed
             const op = this.readNextOpCode();
@@ -3090,10 +3308,7 @@ class Gameboy {
         let keepRunning = true;
         while (keepRunning) {
             if (this.inFrameExecutionMode) {
-                //const t0 = performance.now();
                 keepRunning = await this.executeNextFrame();
-                //const t1 = performance.now();
-                //console.log(`executeNextFrame took ${t1 - t0} milliseconds.`);
                 // pause execution. show the debug console
                 if (keepRunning) {
                     this.debugger.showConsole();

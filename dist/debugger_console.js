@@ -215,9 +215,6 @@ class DebugConsole {
     inDebuggerActive() {
         return this.inDebuggerMode;
     }
-    recordAddress(cpu) {
-        this.tracedAddresses.push(cpu.PC);
-    }
     showConsole() {
         // When true the reply will continue to prompt user for debugger commands
         // the NEXT and CONTINUE command will exit this loop
