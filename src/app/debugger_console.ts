@@ -260,10 +260,6 @@ export class DebugConsole {
         return this.inDebuggerMode;
     }
 
-    public recordAddress(cpu: any) {
-        this.tracedAddresses.push(cpu.PC);
-    }
-
     public showConsole() {
         // When true the reply will continue to prompt user for debugger commands
         // the NEXT and CONTINUE command will exit this loop

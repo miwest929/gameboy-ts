@@ -5,7 +5,6 @@ import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
 import { disassemble } from './disassembler';
 
-const ADDRESS_TRACING_MODE = false;
 const LOG_SERIAL_IO_BYTES = true;
 
 /*
@@ -3269,10 +3268,6 @@ export class Gameboy {
   // @return boolean => should we continue executing
   public async executeNextTick(): Promise<boolean> {
     const prevProgramCounter = this.cpu.PC;
-
-    if (ADDRESS_TRACING_MODE) {
-        this.debugger.recordAddress(this.cpu);
-    }
 
     if (this.inDebugMode && this.debugger.shouldShowDebugger()) {
       // suspend execution until a key is pressed
