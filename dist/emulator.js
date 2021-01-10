@@ -7,7 +7,7 @@ const ppu_1 = require("./ppu");
 const mbc_1 = require("./mbc");
 const debugger_console_1 = require("./debugger_console");
 const disassembler_1 = require("./disassembler");
-const LOG_SERIAL_IO_BYTES = true;
+const LOG_SERIAL_IO_BYTES = false;
 /*
 TODO:
   In order to hookthe backend (this repo) with its frontend (gameboy-ts-web) this file needs to be
@@ -3244,11 +3244,8 @@ class Gameboy {
             const previousLY = this.ppu.LY;
             keepRunning = await this.executeNextTick();
             hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
-            // screen finished rendering so invoke passed in onFrame callback
-            //this.onFrame(this.ppu.getScreenBuffer());
             instructionsExecuted++;
         }
-        console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
         // screen finished rendering so invoke passed in onFrame callback
         this.onFrame(this.ppu.getScreenBuffer());
         return keepRunning;

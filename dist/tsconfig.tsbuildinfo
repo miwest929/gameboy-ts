@@ -192,7 +192,7 @@
         "affectsGlobalScope": false
       },
       "../src/app/emulator.ts": {
-        "version": "09386e7375a409d1df23abd409ec8d03e2f73d52028cf74b75c8bc4f9033e31f",
+        "version": "64b74ed8090e2ed4a1018776e60b378642a3b917f9a46f6ed4589fbcfcbb9648",
         "signature": "e2ac0a730201806a00b443b017516720c916fdf20bba994d9f930b32740b3c86",
         "affectsGlobalScope": false
       },

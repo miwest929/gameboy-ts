@@ -5,7 +5,7 @@ import { MemoryBankController, MBC0, MBC1 } from './mbc';
 import { DebugConsole } from './debugger_console';
 import { disassemble } from './disassembler';
 
-const LOG_SERIAL_IO_BYTES = true;
+const LOG_SERIAL_IO_BYTES = false;
 
 /*
 TODO:
@@ -3242,14 +3242,10 @@ export class Gameboy {
     while (keepRunning && !hasFinishedFrame) {
         const previousLY = this.ppu.LY;
         keepRunning = await this.executeNextTick();
-        hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;
-
-        // screen finished rendering so invoke passed in onFrame callback
-        //this.onFrame(this.ppu.getScreenBuffer());
-
+        hasFinishedFrame = this.ppu.LY === 144 && this.ppu.LY !== previousLY;        
         instructionsExecuted++;
     }
-    console.log(`Finished executing next frame. Executed ${instructionsExecuted} instructions`);
+
     // screen finished rendering so invoke passed in onFrame callback
     this.onFrame(this.ppu.getScreenBuffer());
 
