@@ -192,13 +192,13 @@
         "affectsGlobalScope": false
       },
       "../src/app/emulator.ts": {
-        "version": "6cbb806ff60999c273eef9b0e17d32f61e34bac398c4299bbcc0d9f6396f5b9f",
-        "signature": "769aa3884183dbe6d48b5b5ef116c9df14726cd52ed6982b4963838a06ee2626",
+        "version": "09386e7375a409d1df23abd409ec8d03e2f73d52028cf74b75c8bc4f9033e31f",
+        "signature": "e2ac0a730201806a00b443b017516720c916fdf20bba994d9f930b32740b3c86",
         "affectsGlobalScope": false
       },
       "../src/app/debugger_console.ts": {
-        "version": "bdf421a3aef5c61b2ac22ca0d4b31245b36f5ea242273688320171452073c13b",
-        "signature": "319b8580d54a5e534528831c5ac37b74ea88de871b7513df6fb93486d39f4d37",
+        "version": "fc7cd9f83ded6e69f2fb2221c2e9bae4ef3b455d792c9e9a87d62c5400e3cc18",
+        "signature": "55ebdd05d8d1205fc1bc78f8a57ca62c0cd2b06bc539a144a0a841478c5124c6",
         "affectsGlobalScope": false
       },
       "../src/app/gameboy.ts": {

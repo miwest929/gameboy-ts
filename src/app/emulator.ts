@@ -3288,23 +3288,12 @@ export class Gameboy {
         console.log(`Error: cpu.PC was not changed after last executeInstruction() call. Infinite loop`);
         return false;
     }
-    
-    // was last instruction a call? if so inform the debugger
-    if (this.cpu.lastExecutedOpCode === 0xCD) {
-      this.debugger.pushCallAddress(this.cpu.PC);
-    } else if (this.cpu.lastExecutedOpCode === 0xD9 || this.cpu.lastExecutedOpCode === 0xC9) {
-        this.debugger.popCallAddress();
-    } else if ((this.cpu.lastExecutedOpCode === 0xC0 || this.cpu.lastExecutedOpCode === 0xC8) && (this.cpu.PC - prevProgramCounter) !== 1) {
-        // conditional returns
-        this.debugger.popCallAddress();
-    }
 
     this.ppu.step(cycles);
 
     // check if V Blank Interrupt was requested
     if (this.processInterrupts()) {
       // interrupt was invoked. Do nothing else and start executing the interrupt immediately
-      this.debugger.pushCallAddress(this.cpu.PC);
       return true;
     }
 

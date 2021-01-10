@@ -206,12 +206,6 @@ class DebugConsole {
     shouldShowDebugger() {
         return this.inDebuggerActive() || this.breakpointTriggered();
     }
-    pushCallAddress(callAddr) {
-        this.pastAddresses.push(callAddr);
-    }
-    popCallAddress() {
-        this.pastAddresses.pop();
-    }
     inDebuggerActive() {
         return this.inDebuggerMode;
     }

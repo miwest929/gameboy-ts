@@ -248,14 +248,6 @@ export class DebugConsole {
         return this.inDebuggerActive() || this.breakpointTriggered();
     }
 
-    public pushCallAddress(callAddr: number) {
-        this.pastAddresses.push(callAddr);
-    }
-
-    public popCallAddress() {
-        this.pastAddresses.pop();
-    }
-
     public inDebuggerActive() {
         return this.inDebuggerMode;
     }
